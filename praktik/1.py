@@ -10,6 +10,8 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.animation import FuncAnimation
 import threading
 import os
+import openpyxl
+from openpyxl.styles import Font, PatternFill, Alignment
 
 pd.set_option('future.no_silent_downcasting', True)
 plt.rcParams.update({'font.size': 9})
@@ -136,6 +138,14 @@ class SalesAnalyzerApp:
         )
         self.load_btn.pack(side=tk.LEFT, padx=5)
 
+        self.export_btn = tk.Button(
+            center_container, text="Сохранить в Excel",
+            command=self.export_to_excel,
+            bg="#218359", fg="white", font=("Arial", 10, "bold"), padx=10
+        )
+        self.export_btn.pack(side=tk.LEFT, padx=5)
+        self.export_btn.config(state="disabled")
+
         self.charts_frame = tk.Frame(root, bg="#f8f9fa")
         self.charts_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
@@ -154,6 +164,7 @@ class SalesAnalyzerApp:
         self.anim1 = self.anim2 = None
         self.monthly_df = None
         self.future_monthly = None
+        self.df_full = None
 
     def _on_closing(self):
         if self.anim1:
@@ -207,6 +218,8 @@ class SalesAnalyzerApp:
             df['Скидки'] = pd.to_numeric(df['Скидки'], errors='coerce').fillna(0)
             df = df.dropna(subset=['Цена за шт', 'Количество продаж'])
 
+            self.df_full = df.copy()
+
             df['месяц'] = df['Дата'].dt.month
             df['квартал'] = df['Дата'].dt.quarter
             df['день_недели'] = df['Дата'].dt.dayofweek
@@ -236,7 +249,8 @@ class SalesAnalyzerApp:
             df['месяц_period'] = df['Дата'].dt.to_period('M')
             monthly = df.groupby('месяц_period', as_index=False).agg({
                 'Количество продаж': 'sum',
-                'оценка_выручки': 'sum'
+                'оценка_выручки': 'sum',
+                'Цена за шт': 'mean'
             })
             monthly['месяц_str'] = monthly['месяц_period'].astype(str)
             monthly = monthly.sort_values('месяц_period').reset_index(drop=True)
@@ -272,13 +286,14 @@ class SalesAnalyzerApp:
             group_size = max(1, len(future_df) // n_months)
             future_df['month_id'] = np.arange(len(future_df)) // group_size
             future_df = future_df[future_df['month_id'] < n_months]
-            future_monthly = future_df.groupby('month_id')['прогноз_выручка'].sum().reset_index()
+            future_monthly = future_df.groupby('month_id')['прогноз_выручка', 'прогноз_спроса'].sum().reset_index()
             future_monthly = future_monthly.sort_values('month_id').reset_index(drop=True)
 
             while len(future_monthly) < n_months:
-                avg = future_monthly['прогноз_выручка'].mean() if len(future_monthly) > 0 else 50000
+                avg_rev = future_monthly['прогноз_выручка'].mean() if len(future_monthly) > 0 else 50000
+                avg_qty = future_monthly['прогноз_спроса'].mean() if len(future_monthly) > 0 else 100
                 future_monthly = future_monthly.append(
-                    {'month_id': len(future_monthly), 'прогноз_выручка': avg},
+                    {'month_id': len(future_monthly), 'прогноз_выручка': avg_rev, 'прогноз_спроса': avg_qty},
                     ignore_index=True
                 )
             future_monthly = future_monthly.head(n_months)
@@ -305,6 +320,7 @@ class SalesAnalyzerApp:
             self.future_monthly = future_monthly
 
             self._draw_animation()
+            self.export_btn.config(state="normal")
 
         except Exception as e:
             messagebox.showerror("Ошибка визуализации", str(e))
@@ -312,8 +328,9 @@ class SalesAnalyzerApp:
     def _set_ui_loading(self, state):
         self.is_loading = state
         if state:
-            self.load_btn.config(state="disabled", text="⏳ Анализ...")
+            self.load_btn.config(state="disabled", text="Анализ...")
             self.browse_btn.config(state="disabled")
+            self.export_btn.config(state="disabled")
         else:
             self.load_btn.config(state="normal", text="Запустить анализ")
             self.browse_btn.config(state="normal")
@@ -361,8 +378,8 @@ class SalesAnalyzerApp:
         self.ax1.set_xticks(range(n))
         self.ax1.set_xticklabels(x_labels, rotation=45, ha='right', fontsize=8)
 
-        bars_leg = self.ax1.legend(handles=[bars], loc='upper left', fontsize=9, frameon=True, fancybox=True, shadow=False)
-        line_leg = ax1b.legend(handles=[line], loc='upper right', fontsize=9, frameon=True, fancybox=True, shadow=False)
+        bars_leg = self.ax1.legend(handles=[bars], loc='upper left', fontsize=9)
+        line_leg = ax1b.legend(handles=[line], loc='upper right', fontsize=9)
         self.ax1.add_artist(bars_leg)
 
         def animate1(frame):
@@ -392,7 +409,6 @@ class SalesAnalyzerApp:
         self.ax2.set_xlabel('Месяц', fontsize=10)
         self.ax2.set_ylabel('Выручка (₽)', color='#000000', fontsize=10)
         self.ax2.tick_params(axis='y', labelcolor='#000000', labelsize=9)
-        self.ax2.tick_params(axis='x', labelsize=9)
         self.ax2.grid(True, linestyle='--', alpha=0.5, linewidth=0.7)
         self.ax2.spines['top'].set_visible(False)
         self.ax2.spines['right'].set_visible(False)
@@ -402,7 +418,7 @@ class SalesAnalyzerApp:
         self.ax2.set_xticks(x_vals)
         self.ax2.set_xticklabels(month_labels, fontsize=9)
 
-        self.ax2.legend(loc='upper left', fontsize=9, frameon=True, fancybox=True, shadow=False)
+        self.ax2.legend(loc='upper left', fontsize=9)
 
         def animate2(frame):
             k = min(frame + 1, 12)
@@ -415,6 +431,86 @@ class SalesAnalyzerApp:
             cache_frame_data=False
         )
         self.canvas2.draw()
+
+    def export_to_excel(self):
+        if self.future_monthly is None or self.monthly_df is None or self.df_full is None:
+            messagebox.showwarning("Внимание", "Сначала запустите анализ.")
+            return
+
+        try:
+            path = filedialog.asksaveasfilename(
+                defaultextension=".xlsx",
+                filetypes=[("Excel", "*.xlsx")],
+                title="Сохранить прогноз"
+            )
+            if not path:
+                return
+
+            df_forecast = pd.DataFrame({
+                'Месяц': self.future_monthly['месяц_str'],
+                'Прогноз выручки (₽)': self.future_monthly['прогноз_выручка'].round(0),
+                'Прогноз спроса (шт)': self.future_monthly['прогноз_спроса'].round(0)
+            })
+
+            df_eval = pd.DataFrame({
+                'Месяц': self.monthly_df['месяц_str'],
+                'Факт: спрос (шт)': self.monthly_df['Количество продаж'],
+                'Оценка: спрос (шт)': self.monthly_df['прогноз_спроса'].round(0),
+                'Факт: выручка (₽)': (self.monthly_df['Количество продаж'] * self.monthly_df['Цена за шт']).round(0),
+                'Оценка: выручка (₽)': self.monthly_df['оценка_выручки'].round(0)
+            })
+
+            df_elast = []
+            grouped = self.df_full.groupby(['Товар', 'Дата'])
+            for (item, date), group in grouped:
+                if len(group) >= 2:
+                    g = group.sort_values('Цена за шт').head(2)
+                    if len(g) == 2 and g.iloc[0]['Цена за шт'] != g.iloc[1]['Цена за шт']:
+                        p1, q1 = g.iloc[0]['Цена за шт'], g.iloc[0]['Количество продаж']
+                        p2, q2 = g.iloc[1]['Цена за шт'], g.iloc[1]['Количество продаж']
+                        if p1 > 0 and q1 > 0:
+                            dp = (p2 - p1) / p1 * 100
+                            dq = (q2 - q1) / q1 * 100
+                            elast = round(dq / dp, 2) if dp != 0 else 0
+                            df_elast.append([
+                                item, g.iloc[0]['Категория'], date.strftime('%d.%m.%Y'),
+                                p1, q1, p2, q2,
+                                round(dp, 1), round(dq, 1), elast
+                            ])
+
+            df_elasticity = pd.DataFrame(df_elast, columns=[
+                "Товар", "Категория", "Дата",
+                "Цена₁ (₽)", "Спрос₁ (шт)",
+                "Цена₂ (₽)", "Спрос₂ (шт)",
+                "ΔЦена (%)", "ΔСпрос (%)", "Эластичность"
+            ])
+
+            with pd.ExcelWriter(path, engine='openpyxl') as writer:
+                df_forecast.to_excel(writer, sheet_name='Прогноз на 2026', index=False)
+                df_eval.to_excel(writer, sheet_name='Оценка по месяцам', index=False)
+                if not df_elasticity.empty:
+                    df_elasticity.to_excel(writer, sheet_name='Ценовая эластичность', index=False)
+
+            wb = openpyxl.load_workbook(path)
+            for ws in wb.worksheets:
+                for cell in ws[1]:
+                    cell.font = Font(bold=True)
+                    cell.fill = PatternFill("solid", fgColor="DEEBF7" if ws.title == "Прогноз на 2026" else
+                                            "E2F0D9" if ws.title == "Оценка по месяцам" else "FCE4D6")
+                    cell.alignment = Alignment(horizontal="center")
+                for col in ws.columns:
+                    max_length = 0
+                    column = col[0].column_letter
+                    for cell in col:
+                        if len(str(cell.value)) > max_length:
+                            max_length = len(str(cell.value))
+                    ws.column_dimensions[column].width = max(max_length + 2, 12)
+            wb.save(path)
+
+            messagebox.showinfo("Успех", f"Прогноз сохранён:\n{os.path.basename(path)}")
+
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Не удалось сохранить файл:\n{str(e)}")
 
 
 if __name__ == "__main__":
