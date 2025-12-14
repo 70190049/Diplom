@@ -164,7 +164,7 @@ class SalesAnalyzerApp:
         self.anim1 = self.anim2 = None
         self.monthly_df = None
         self.future_monthly = None
-        self.df_full = None
+        self.df_full = None  # Для расчёта эластичности
 
     def _on_closing(self):
         if self.anim1:
@@ -286,7 +286,7 @@ class SalesAnalyzerApp:
             group_size = max(1, len(future_df) // n_months)
             future_df['month_id'] = np.arange(len(future_df)) // group_size
             future_df = future_df[future_df['month_id'] < n_months]
-            future_monthly = future_df.groupby('month_id')['прогноз_выручка', 'прогноз_спроса'].sum().reset_index()
+            future_monthly = future_df.groupby('month_id')[['прогноз_выручка', 'прогноз_спроса']].sum().reset_index()
             future_monthly = future_monthly.sort_values('month_id').reset_index(drop=True)
 
             while len(future_monthly) < n_months:
