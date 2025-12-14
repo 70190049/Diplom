@@ -10,11 +10,14 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.animation import FuncAnimation
 import threading
 import os
-import openpyxl
-from openpyxl.styles import Font, PatternFill, Alignment
+import re
 
 pd.set_option('future.no_silent_downcasting', True)
 plt.rcParams.update({'font.size': 9})
+
+
+def sanitize_filename(filename):
+    return re.sub(r'[<>:"/\\|?*]', '_', filename).strip()
 
 
 class SimpleNN:
@@ -164,7 +167,7 @@ class SalesAnalyzerApp:
         self.anim1 = self.anim2 = None
         self.monthly_df = None
         self.future_monthly = None
-        self.df_full = None  # Для расчёта эластичности
+        self.df_full = None
 
     def _on_closing(self):
         if self.anim1:
@@ -438,13 +441,17 @@ class SalesAnalyzerApp:
             return
 
         try:
+            default_name = sanitize_filename("Прогноз_спроса")
             path = filedialog.asksaveasfilename(
+                initialfile=default_name,
                 defaultextension=".xlsx",
                 filetypes=[("Excel", "*.xlsx")],
                 title="Сохранить прогноз"
             )
             if not path:
                 return
+            if not path.endswith('.xlsx'):
+                path += '.xlsx'
 
             df_forecast = pd.DataFrame({
                 'Месяц': self.future_monthly['месяц_str'],
@@ -490,22 +497,6 @@ class SalesAnalyzerApp:
                 df_eval.to_excel(writer, sheet_name='Оценка по месяцам', index=False)
                 if not df_elasticity.empty:
                     df_elasticity.to_excel(writer, sheet_name='Ценовая эластичность', index=False)
-
-            wb = openpyxl.load_workbook(path)
-            for ws in wb.worksheets:
-                for cell in ws[1]:
-                    cell.font = Font(bold=True)
-                    cell.fill = PatternFill("solid", fgColor="DEEBF7" if ws.title == "Прогноз на 2026" else
-                                            "E2F0D9" if ws.title == "Оценка по месяцам" else "FCE4D6")
-                    cell.alignment = Alignment(horizontal="center")
-                for col in ws.columns:
-                    max_length = 0
-                    column = col[0].column_letter
-                    for cell in col:
-                        if len(str(cell.value)) > max_length:
-                            max_length = len(str(cell.value))
-                    ws.column_dimensions[column].width = max(max_length + 2, 12)
-            wb.save(path)
 
             messagebox.showinfo("Успех", f"Прогноз сохранён:\n{os.path.basename(path)}")
 
