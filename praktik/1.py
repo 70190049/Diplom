@@ -10,6 +10,8 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.animation import FuncAnimation
 import threading
 import os
+import openpyxl
+from openpyxl.styles import Font, PatternFill, Alignment
 import re
 
 pd.set_option('future.no_silent_downcasting', True)
@@ -17,7 +19,7 @@ plt.rcParams.update({'font.size': 9})
 
 
 def sanitize_filename(filename):
-    return re.sub(r'[<>:"/\\|?*]', '_', filename).strip()
+    return re.sub(r'[<>:"/\\|?*]', '_', filename)
 
 
 class SimpleNN:
@@ -252,6 +254,7 @@ class SalesAnalyzerApp:
             df['месяц_period'] = df['Дата'].dt.to_period('M')
             monthly = df.groupby('месяц_period', as_index=False).agg({
                 'Количество продаж': 'sum',
+                'прогноз_спроса': 'sum',
                 'оценка_выручки': 'sum',
                 'Цена за шт': 'mean'
             })
@@ -295,10 +298,12 @@ class SalesAnalyzerApp:
             while len(future_monthly) < n_months:
                 avg_rev = future_monthly['прогноз_выручка'].mean() if len(future_monthly) > 0 else 50000
                 avg_qty = future_monthly['прогноз_спроса'].mean() if len(future_monthly) > 0 else 100
-                future_monthly = future_monthly.append(
-                    {'month_id': len(future_monthly), 'прогноз_выручка': avg_rev, 'прогноз_спроса': avg_qty},
-                    ignore_index=True
-                )
+                new_row = pd.DataFrame([{
+                    'month_id': len(future_monthly),
+                    'прогноз_выручка': avg_rev,
+                    'прогноз_спроса': avg_qty
+                }])
+                future_monthly = pd.concat([future_monthly, new_row], ignore_index=True)
             future_monthly = future_monthly.head(n_months)
             future_monthly['месяц_str'] = [(last_date + pd.DateOffset(months=i+1)).strftime('%Y-%m') for i in range(n_months)]
 
@@ -441,7 +446,7 @@ class SalesAnalyzerApp:
             return
 
         try:
-            default_name = sanitize_filename("Прогноз_спроса")
+            default_name = sanitize_filename("Прогноз_спроса") + ".xlsx"
             path = filedialog.asksaveasfilename(
                 initialfile=default_name,
                 defaultextension=".xlsx",
@@ -450,56 +455,44 @@ class SalesAnalyzerApp:
             )
             if not path:
                 return
-            if not path.endswith('.xlsx'):
+            if not path.lower().endswith('.xlsx'):
                 path += '.xlsx'
 
-            df_forecast = pd.DataFrame({
-                'Месяц': self.future_monthly['месяц_str'],
-                'Прогноз выручки (₽)': self.future_monthly['прогноз_выручка'].round(0),
-                'Прогноз спроса (шт)': self.future_monthly['прогноз_спроса'].round(0)
-            })
+            wb = openpyxl.Workbook()
+            ws1 = wb.active
+            ws1.title = "Прогноз на 2026"
+            ws1.append(["Месяц", "Прогноз выручки (₽)", "Прогноз спроса (шт)"])
+            for cell in ws1[1]:
+                cell.font = Font(bold=True)
+                cell.fill = PatternFill("solid", fgColor="DEEBF7")
+                cell.alignment = Alignment(horizontal="center")
 
-            df_eval = pd.DataFrame({
-                'Месяц': self.monthly_df['месяц_str'],
-                'Факт: спрос (шт)': self.monthly_df['Количество продаж'],
-                'Оценка: спрос (шт)': self.monthly_df['прогноз_спроса'].round(0),
-                'Факт: выручка (₽)': (self.monthly_df['Количество продаж'] * self.monthly_df['Цена за шт']).round(0),
-                'Оценка: выручка (₽)': self.monthly_df['оценка_выручки'].round(0)
-            })
+            for _, row in self.future_monthly.iterrows():
+                month = str(row['месяц_str'])
+                rev = int(round(row['прогноз_выручка'])) if pd.notna(row['прогноз_выручка']) else 0
+                qty = int(round(row['прогноз_спроса'])) if pd.notna(row['прогноз_спроса']) else 0
+                ws1.append([month, rev, qty])
 
-            df_elast = []
-            grouped = self.df_full.groupby(['Товар', 'Дата'])
-            for (item, date), group in grouped:
-                if len(group) >= 2:
-                    g = group.sort_values('Цена за шт').head(2)
-                    if len(g) == 2 and g.iloc[0]['Цена за шт'] != g.iloc[1]['Цена за шт']:
-                        p1, q1 = g.iloc[0]['Цена за шт'], g.iloc[0]['Количество продаж']
-                        p2, q2 = g.iloc[1]['Цена за шт'], g.iloc[1]['Количество продаж']
-                        if p1 > 0 and q1 > 0:
-                            dp = (p2 - p1) / p1 * 100
-                            dq = (q2 - q1) / q1 * 100
-                            elast = round(dq / dp, 2) if dp != 0 else 0
-                            df_elast.append([
-                                item, g.iloc[0]['Категория'], date.strftime('%d.%m.%Y'),
-                                p1, q1, p2, q2,
-                                round(dp, 1), round(dq, 1), elast
-                            ])
+            ws2 = wb.create_sheet("Оценка по месяцам")
+            ws2.append(["Месяц", "Факт: спрос (шт)", "Оценка: спрос (шт)", "Факт: выручка (₽)", "Оценка: выручка (₽)"])
+            for cell in ws2[1]:
+                cell.font = Font(bold=True)
+                cell.fill = PatternFill("solid", fgColor="E2F0D9")
+                cell.alignment = Alignment(horizontal="center")
 
-            df_elasticity = pd.DataFrame(df_elast, columns=[
-                "Товар", "Категория", "Дата",
-                "Цена₁ (₽)", "Спрос₁ (шт)",
-                "Цена₂ (₽)", "Спрос₂ (шт)",
-                "ΔЦена (%)", "ΔСпрос (%)", "Эластичность"
-            ])
+            for _, row in self.monthly_df.iterrows():
+                month = str(row['месяц_str'])
+                fact_qty = int(row['Количество продаж'])
+                pred_qty = int(round(row['прогноз_спроса'])) if pd.notna(row['прогноз_спроса']) else 0
+                fact_rev = int(fact_qty * row['Цена за шт'])
+                pred_rev = int(round(row['оценка_выручки'])) if pd.notna(row['оценка_выручки']) else 0
+                ws2.append([month, fact_qty, pred_qty, fact_rev, pred_rev])
 
-            with pd.ExcelWriter(path, engine='openpyxl') as writer:
-                df_forecast.to_excel(writer, sheet_name='Прогноз на 2026', index=False)
-                df_eval.to_excel(writer, sheet_name='Оценка по месяцам', index=False)
-                if not df_elasticity.empty:
-                    df_elasticity.to_excel(writer, sheet_name='Ценовая эластичность', index=False)
-
+            wb.save(path)
             messagebox.showinfo("Успех", f"Прогноз сохранён:\n{os.path.basename(path)}")
 
+        except PermissionError:
+            messagebox.showerror("Ошибка доступа", "Нет прав на запись в эту папку.\nПопробуйте выбрать «Документы».")
         except Exception as e:
             messagebox.showerror("Ошибка", f"Не удалось сохранить файл:\n{str(e)}")
 
