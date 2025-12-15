@@ -1,4 +1,5 @@
 import tkinter as tk
+import tkinter.ttk as ttk  # ← добавлено
 from tkinter import filedialog, messagebox
 import pandas as pd
 import numpy as np
@@ -105,7 +106,7 @@ class SalesAnalyzerApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Анализатор продаж")
-        self.root.geometry("1550x550")
+        self.root.geometry("1550x580")  # чуть выше для комбо
         self.root.configure(bg="#f8f9fa")
         self.root.protocol("WM_DELETE_WINDOW", self._on_closing)
 
@@ -120,8 +121,9 @@ class SalesAnalyzerApp:
         )
         self.status_label.pack(side=tk.LEFT, padx=20)
 
-        control_frame = tk.Frame(root, bg="#f8f9fa", pady=10)
+        control_frame = tk.Frame(root, bg="#f8f9fa", pady=5)
         control_frame.pack(fill=tk.X)
+
         center_container = tk.Frame(control_frame, bg="#f8f9fa")
         center_container.pack(expand=True)
 
@@ -150,6 +152,21 @@ class SalesAnalyzerApp:
         )
         self.export_btn.pack(side=tk.LEFT, padx=5)
         self.export_btn.config(state="disabled")
+
+        # === Добавлено: выбор категории ===
+        cat_frame = tk.Frame(control_frame, bg="#f8f9fa", pady=5)
+        cat_frame.pack(expand=True)
+        tk.Label(cat_frame, text="Категория:", font=("Arial", 11), bg="#f8f9fa").pack(side=tk.LEFT, padx=5)
+        self.category_var = tk.StringVar(value="Все категории")
+        self.category_combo = ttk.Combobox(
+            cat_frame,
+            textvariable=self.category_var,
+            state="disabled",  # изначально выключен
+            width=25,
+            font=("Arial", 10)
+        )
+        self.category_combo.pack(side=tk.LEFT, padx=5)
+        self.category_combo.bind("<<ComboboxSelected>>", self.on_category_change)
 
         self.charts_frame = tk.Frame(root, bg="#f8f9fa")
         self.charts_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
@@ -193,6 +210,15 @@ class SalesAnalyzerApp:
         if path:
             self.path_entry.delete(0, tk.END)
             self.path_entry.insert(0, path)
+            # Сбрасываем категории до загрузки
+            self.category_combo.config(values=["Загрузите файл"])
+            self.category_var.set("Загрузите файл")
+            self.category_combo.config(state="disabled")
+
+    def on_category_change(self, event=None):
+        # Можно разрешить перезапуск анализа при смене категории (опционально)
+        if not self.is_loading and self.df_full is not None:
+            self.load_btn.config(bg="#27ae60", text="Запустить анализ")
 
     def start_analysis(self):
         if self.is_loading:
@@ -214,6 +240,13 @@ class SalesAnalyzerApp:
             if missing:
                 raise ValueError(f"Отсутствуют столбцы: {missing}")
 
+            # === Фильтрация по категории ===
+            selected_cat = self.category_var.get()
+            if selected_cat != "Все категории":
+                df = df[df['Категория'] == selected_cat].copy()
+                if df.empty:
+                    raise ValueError(f"Нет данных по категории: '{selected_cat}'")
+
             df['Дата'] = pd.to_datetime(df['Дата'], dayfirst=True, errors='coerce')
             df = df.dropna(subset=['Дата'])
             df['Цена за шт'] = pd.to_numeric(df['Цена за шт'], errors='coerce')
@@ -223,7 +256,14 @@ class SalesAnalyzerApp:
             df['Скидки'] = pd.to_numeric(df['Скидки'], errors='coerce').fillna(0)
             df = df.dropna(subset=['Цена за шт', 'Количество продаж'])
 
+            if len(df) < 10:
+                raise ValueError(f"Слишком мало данных для обучения после фильтрации по категории '{selected_cat}' (требуется ≥10 записей).")
+
             self.df_full = df.copy()
+
+            # Обновляем список категорий в UI (если "Все категории" выбрано — показываем все)
+            all_cats = ["Все категории"] + sorted(df['Категория'].dropna().unique().tolist())
+            self.root.after(0, lambda: self.category_combo.config(values=all_cats, state="readonly"))
 
             df['месяц'] = df['Дата'].dt.month
             df['квартал'] = df['Дата'].dt.quarter
@@ -267,9 +307,9 @@ class SalesAnalyzerApp:
                 next_date = last_date + pd.DateOffset(months=i)
                 hist = df[df['Дата'].dt.month == next_date.month]
                 if len(hist) == 0:
-                    hist = df.sample(50, replace=True)
+                    hist = df.sample(min(50, len(df)), replace=True)
                 for _, row in hist.iterrows():
-                    new_price = row['Цена за шт'] * (1.01 ** i)
+                    new_price = row['Цена за шт'] * (1.005 ** i)  # 0.5% рост ~ инфляция
                     future_rows.append({
                         'Цена за шт': new_price,
                         'Скидки': row['Скидки'],
@@ -307,7 +347,7 @@ class SalesAnalyzerApp:
             future_monthly = future_monthly.head(n_months)
             future_monthly['месяц_str'] = [(last_date + pd.DateOffset(months=i+1)).strftime('%Y-%m') for i in range(n_months)]
 
-            self.root.after(0, self._update_ui_with_results, monthly, future_monthly)
+            self.root.after(0, self._update_ui_with_results, monthly, future_monthly, selected_cat)
 
         except Exception as e:
             import traceback
@@ -317,7 +357,7 @@ class SalesAnalyzerApp:
         finally:
             self.root.after(0, self._set_ui_loading, False)
 
-    def _update_ui_with_results(self, monthly_df, future_monthly):
+    def _update_ui_with_results(self, monthly_df, future_monthly, category):
         try:
             self.fig1.clear()
             self.fig2.clear()
@@ -326,8 +366,9 @@ class SalesAnalyzerApp:
 
             self.monthly_df = monthly_df
             self.future_monthly = future_monthly
+            self.current_category = category
 
-            self._draw_animation()
+            self._draw_animation(category)
             self.export_btn.config(state="normal")
 
         except Exception as e:
@@ -338,12 +379,14 @@ class SalesAnalyzerApp:
         if state:
             self.load_btn.config(state="disabled", text="Анализ...")
             self.browse_btn.config(state="disabled")
+            self.category_combo.config(state="disabled")
             self.export_btn.config(state="disabled")
         else:
             self.load_btn.config(state="normal", text="Запустить анализ")
             self.browse_btn.config(state="normal")
+            self.category_combo.config(state="readonly")
 
-    def _draw_animation(self):
+    def _draw_animation(self, category):
         if self.anim1:
             try:
                 self.anim1.event_source.stop()
@@ -375,7 +418,11 @@ class SalesAnalyzerApp:
         ax1b.set_ylabel('Выручка, ₽', color='#000000', fontsize=10)
         self.ax1.tick_params(axis='y', labelcolor='#000000', labelsize=9)
         ax1b.tick_params(axis='y', labelcolor='#000000', labelsize=9)
-        self.ax1.set_title('Фактический спрос и оценка выручки', fontweight='bold', fontsize=11)
+
+        # Заголовок с категорией
+        cat_title = "по всем категориям" if category == "Все категории" else f"по категории: {category}"
+        self.ax1.set_title(f'Факт и прогноз спроса ({cat_title})', fontweight='bold', fontsize=11)
+
         self.ax1.set_xlabel('Месяц', fontsize=10)
         self.ax1.grid(True, linestyle='--', alpha=0.5, linewidth=0.7)
         self.ax1.spines['top'].set_visible(False)
@@ -413,7 +460,7 @@ class SalesAnalyzerApp:
 
         line_fut, = self.ax2.plot([], [], 's-', color='#a6d75b', linewidth=2.5, markersize=7, label='2026')
 
-        self.ax2.set_title('Прогноз выручки на 2026 год', fontweight='bold', fontsize=11)
+        self.ax2.set_title(f'Прогноз выручки на 2026 ({cat_title})', fontweight='bold', fontsize=11)
         self.ax2.set_xlabel('Месяц', fontsize=10)
         self.ax2.set_ylabel('Выручка (₽)', color='#000000', fontsize=10)
         self.ax2.tick_params(axis='y', labelcolor='#000000', labelsize=9)
@@ -446,7 +493,8 @@ class SalesAnalyzerApp:
             return
 
         try:
-            default_name = sanitize_filename("Прогноз_спроса") + ".xlsx"
+            cat_name = self.current_category
+            default_name = f"Прогноз_спроса_{sanitize_filename(cat_name)}" + ".xlsx"
             path = filedialog.asksaveasfilename(
                 initialfile=default_name,
                 defaultextension=".xlsx",
@@ -488,11 +536,37 @@ class SalesAnalyzerApp:
                 pred_rev = int(round(row['оценка_выручки'])) if pd.notna(row['оценка_выручки']) else 0
                 ws2.append([month, fact_qty, pred_qty, fact_rev, pred_rev])
 
+            # === Новый лист: по товарам ===
+            ws3 = wb.create_sheet("Товары")
+            ws3.append(["Товар", "Категория", "Средняя цена", "Факт: спрос", "Прогноз: спрос", "Факт: выручка", "Прогноз: выручка"])
+            for cell in ws3[1]:
+                cell.font = Font(bold=True)
+                cell.fill = PatternFill("solid", fgColor="D9E1F2")
+                cell.alignment = Alignment(horizontal="center")
+
+            item_agg = self.df_full.groupby('Товар', as_index=False).agg({
+                'Категория': 'first',
+                'Цена за шт': 'mean',
+                'Количество продаж': 'sum',
+                'прогноз_спроса': 'sum',
+                'оценка_выручки': 'sum'
+            })
+            for _, row in item_agg.iterrows():
+                ws3.append([
+                    row['Товар'],
+                    row['Категория'],
+                    round(row['Цена за шт'], 2),
+                    int(row['Количество продаж']),
+                    int(round(row['прогноз_спроса'])),
+                    int(round(row['Количество продаж'] * row['Цена за шт'])),
+                    int(round(row['оценка_выручки']))
+                ])
+
             wb.save(path)
-            messagebox.showinfo("Успех", f"Прогноз сохранён:\n{os.path.basename(path)}")
+            messagebox.showinfo("Успех", f"Прогноз по категории '{cat_name}' сохранён:\n{os.path.basename(path)}")
 
         except PermissionError:
-            messagebox.showerror("Ошибка доступа", "Нет прав на запись в эту папку.\nПопробуйте выбрать «Документы».")
+            messagebox.showerror("Ошибка доступа", "Нет прав на запись. Попробуйте выбрать «Документы».")
         except Exception as e:
             messagebox.showerror("Ошибка", f"Не удалось сохранить файл:\n{str(e)}")
 
