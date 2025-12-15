@@ -1,5 +1,5 @@
 import tkinter as tk
-import tkinter.ttk as ttk  # ← добавлено
+import tkinter.ttk as ttk
 from tkinter import filedialog, messagebox
 import pandas as pd
 import numpy as np
@@ -106,7 +106,7 @@ class SalesAnalyzerApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Анализатор продаж")
-        self.root.geometry("1550x580")  # чуть выше для комбо
+        self.root.geometry("1550x580")
         self.root.configure(bg="#f8f9fa")
         self.root.protocol("WM_DELETE_WINDOW", self._on_closing)
 
@@ -153,15 +153,14 @@ class SalesAnalyzerApp:
         self.export_btn.pack(side=tk.LEFT, padx=5)
         self.export_btn.config(state="disabled")
 
-        # === Добавлено: выбор категории ===
         cat_frame = tk.Frame(control_frame, bg="#f8f9fa", pady=5)
         cat_frame.pack(expand=True)
         tk.Label(cat_frame, text="Категория:", font=("Arial", 11), bg="#f8f9fa").pack(side=tk.LEFT, padx=5)
-        self.category_var = tk.StringVar(value="Все категории")
+        self.category_var = tk.StringVar(value="Загрузите файл")
         self.category_combo = ttk.Combobox(
             cat_frame,
             textvariable=self.category_var,
-            state="disabled",  # изначально выключен
+            state="disabled",
             width=25,
             font=("Arial", 10)
         )
@@ -187,6 +186,7 @@ class SalesAnalyzerApp:
         self.monthly_df = None
         self.future_monthly = None
         self.df_full = None
+        self.current_category = "Все категории"
 
     def _on_closing(self):
         if self.anim1:
@@ -210,13 +210,16 @@ class SalesAnalyzerApp:
         if path:
             self.path_entry.delete(0, tk.END)
             self.path_entry.insert(0, path)
-            # Сбрасываем категории до загрузки
             self.category_combo.config(values=["Загрузите файл"])
             self.category_var.set("Загрузите файл")
-            self.category_combo.config(state="disabled")
+            self.category_combo.config(state="disabled", foreground="gray")
 
     def on_category_change(self, event=None):
-        # Можно разрешить перезапуск анализа при смене категории (опционально)
+        selected = self.category_var.get()
+        if selected == "Загрузите файл":
+            self.category_combo.config(foreground="gray")
+        else:
+            self.category_combo.config(foreground="black")
         if not self.is_loading and self.df_full is not None:
             self.load_btn.config(bg="#27ae60", text="Запустить анализ")
 
@@ -240,8 +243,10 @@ class SalesAnalyzerApp:
             if missing:
                 raise ValueError(f"Отсутствуют столбцы: {missing}")
 
-            # === Фильтрация по категории ===
             selected_cat = self.category_var.get()
+            if selected_cat == "Загрузите файл":
+                selected_cat = "Все категории"
+
             if selected_cat != "Все категории":
                 df = df[df['Категория'] == selected_cat].copy()
                 if df.empty:
@@ -257,13 +262,14 @@ class SalesAnalyzerApp:
             df = df.dropna(subset=['Цена за шт', 'Количество продаж'])
 
             if len(df) < 10:
-                raise ValueError(f"Слишком мало данных для обучения после фильтрации по категории '{selected_cat}' (требуется ≥10 записей).")
+                raise ValueError(f"Слишком мало данных для обучения (требуется ≥10 записей).")
 
             self.df_full = df.copy()
 
-            # Обновляем список категорий в UI (если "Все категории" выбрано — показываем все)
             all_cats = ["Все категории"] + sorted(df['Категория'].dropna().unique().tolist())
-            self.root.after(0, lambda: self.category_combo.config(values=all_cats, state="readonly"))
+            self.root.after(0, lambda: self.category_combo.config(
+                values=all_cats, state="readonly", foreground="black"
+            ))
 
             df['месяц'] = df['Дата'].dt.month
             df['квартал'] = df['Дата'].dt.quarter
@@ -309,7 +315,7 @@ class SalesAnalyzerApp:
                 if len(hist) == 0:
                     hist = df.sample(min(50, len(df)), replace=True)
                 for _, row in hist.iterrows():
-                    new_price = row['Цена за шт'] * (1.005 ** i)  # 0.5% рост ~ инфляция
+                    new_price = row['Цена за шт'] * (1.005 ** i)
                     future_rows.append({
                         'Цена за шт': new_price,
                         'Скидки': row['Скидки'],
@@ -351,26 +357,18 @@ class SalesAnalyzerApp:
 
         except Exception as e:
             import traceback
-            err_msg = str(e)
             print("Ошибка:", traceback.format_exc())
-            self.root.after(0, messagebox.showerror, "Ошибка", err_msg)
+            self.root.after(0, messagebox.showerror, "Ошибка", str(e))
         finally:
             self.root.after(0, self._set_ui_loading, False)
 
     def _update_ui_with_results(self, monthly_df, future_monthly, category):
         try:
-            self.fig1.clear()
-            self.fig2.clear()
-            self.ax1 = self.fig1.add_subplot(111)
-            self.ax2 = self.fig2.add_subplot(111)
-
             self.monthly_df = monthly_df
             self.future_monthly = future_monthly
             self.current_category = category
-
             self._draw_animation(category)
             self.export_btn.config(state="normal")
-
         except Exception as e:
             messagebox.showerror("Ошибка визуализации", str(e))
 
@@ -408,21 +406,17 @@ class SalesAnalyzerApp:
         df = self.monthly_df
         n = len(df)
 
-        bars = self.ax1.bar(range(n), df['Количество продаж'],
-                           width=0.6, color='#76c68f', alpha=0.7, label='Факт: спрос, шт')
+        bars = self.ax1.bar(range(n), df['Количество продаж'], width=0.6, color='#76c68f', alpha=0.7, label='Факт: спрос, шт')
         ax1b = self.ax1.twinx()
-        line, = ax1b.plot(range(n), df['оценка_выручки'],
-                         'o-', color='#22a7f0', linewidth=2, markersize=6, label='Оценка: выручка, ₽')
+        line, = ax1b.plot(range(n), df['оценка_выручки'], 'o-', color='#22a7f0', linewidth=2, markersize=6, label='Оценка: выручка, ₽')
 
         self.ax1.set_ylabel('Спрос, шт', color='#000000', fontsize=10)
         ax1b.set_ylabel('Выручка, ₽', color='#000000', fontsize=10)
         self.ax1.tick_params(axis='y', labelcolor='#000000', labelsize=9)
         ax1b.tick_params(axis='y', labelcolor='#000000', labelsize=9)
 
-        # Заголовок с категорией
         cat_title = "по всем категориям" if category == "Все категории" else f"по категории: {category}"
         self.ax1.set_title(f'Факт и прогноз спроса ({cat_title})', fontweight='bold', fontsize=11)
-
         self.ax1.set_xlabel('Месяц', fontsize=10)
         self.ax1.grid(True, linestyle='--', alpha=0.5, linewidth=0.7)
         self.ax1.spines['top'].set_visible(False)
@@ -444,11 +438,7 @@ class SalesAnalyzerApp:
             line.set_data(range(k), df['оценка_выручки'].iloc[:k])
             return [line] + [bar for bar in bars[:k]]
 
-        self.anim1 = FuncAnimation(
-            self.fig1, animate1, frames=n,
-            interval=180, blit=True, repeat=False,
-            cache_frame_data=False
-        )
+        self.anim1 = FuncAnimation(self.fig1, animate1, frames=n, interval=180, blit=True, repeat=False, cache_frame_data=False)
         self.canvas1.draw()
 
         self.ax2.clear()
@@ -459,7 +449,6 @@ class SalesAnalyzerApp:
         month_labels = ["Янв", "Фев", "Мар", "Апр", "Май", "Июн", "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек"]
 
         line_fut, = self.ax2.plot([], [], 's-', color='#a6d75b', linewidth=2.5, markersize=7, label='2026')
-
         self.ax2.set_title(f'Прогноз выручки на 2026 ({cat_title})', fontweight='bold', fontsize=11)
         self.ax2.set_xlabel('Месяц', fontsize=10)
         self.ax2.set_ylabel('Выручка (₽)', color='#000000', fontsize=10)
@@ -467,12 +456,10 @@ class SalesAnalyzerApp:
         self.ax2.grid(True, linestyle='--', alpha=0.5, linewidth=0.7)
         self.ax2.spines['top'].set_visible(False)
         self.ax2.spines['right'].set_visible(False)
-
         self.ax2.set_xlim(-0.5, 11.5)
         self.ax2.set_ylim(0, max(y_vals) * 1.15 if y_vals.size > 0 else 100000)
         self.ax2.set_xticks(x_vals)
         self.ax2.set_xticklabels(month_labels, fontsize=9)
-
         self.ax2.legend(loc='upper left', fontsize=9)
 
         def animate2(frame):
@@ -480,11 +467,7 @@ class SalesAnalyzerApp:
             line_fut.set_data(x_vals[:k], y_vals[:k])
             return [line_fut]
 
-        self.anim2 = FuncAnimation(
-            self.fig2, animate2, frames=12,
-            interval=300, blit=True, repeat=False,
-            cache_frame_data=False
-        )
+        self.anim2 = FuncAnimation(self.fig2, animate2, frames=12, interval=300, blit=True, repeat=False, cache_frame_data=False)
         self.canvas2.draw()
 
     def export_to_excel(self):
@@ -536,7 +519,6 @@ class SalesAnalyzerApp:
                 pred_rev = int(round(row['оценка_выручки'])) if pd.notna(row['оценка_выручки']) else 0
                 ws2.append([month, fact_qty, pred_qty, fact_rev, pred_rev])
 
-            # === Новый лист: по товарам ===
             ws3 = wb.create_sheet("Товары")
             ws3.append(["Товар", "Категория", "Средняя цена", "Факт: спрос", "Прогноз: спрос", "Факт: выручка", "Прогноз: выручка"])
             for cell in ws3[1]:
