@@ -249,6 +249,14 @@ class SalesAnalyzerApp:
             return
 
         selected = [self.cat_listbox.get(i) for i in indices]
+
+        if len(selected) > 5:
+            messagebox.showwarning("Внимание", "Можно выбрать не более 5 категорий.")
+            self.cat_listbox.selection_clear(0, tk.END)
+            for i in indices[:5]:
+                self.cat_listbox.selection_set(i)
+            return
+
         if "Все категории" in selected:
             self.selected_categories = ["Все категории"]
             self.cat_listbox.selection_clear(0, tk.END)
