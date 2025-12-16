@@ -106,7 +106,7 @@ class SalesAnalyzerApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Анализатор продаж")
-        self.root.geometry("1550x580")
+        self.root.geometry("1550x680")
         self.root.configure(bg="#f8f9fa")
         self.root.protocol("WM_DELETE_WINDOW", self._on_closing)
 
@@ -155,50 +155,66 @@ class SalesAnalyzerApp:
 
         cat_frame = tk.Frame(control_frame, bg="#f8f9fa", pady=5)
         cat_frame.pack(expand=True)
-        tk.Label(cat_frame, text="Категория:", font=("Arial", 11), bg="#f8f9fa").pack(side=tk.LEFT, padx=5)
-        self.category_var = tk.StringVar(value="Загрузите файл")
-        self.category_combo = ttk.Combobox(
-            cat_frame,
-            textvariable=self.category_var,
-            state="disabled",
-            width=25,
-            font=("Arial", 10)
+
+        tk.Label(cat_frame, text="Категории:", font=("Arial", 11), bg="#f8f9fa").pack(side=tk.LEFT, padx=5)
+
+        list_frame = tk.Frame(cat_frame)
+        list_frame.pack(side=tk.LEFT, padx=5)
+
+        self.cat_listbox = tk.Listbox(
+            list_frame,
+            selectmode=tk.EXTENDED,
+            height=5,
+            width=28,
+            font=("Arial", 10),
+            exportselection=False
         )
-        self.category_combo.pack(side=tk.LEFT, padx=5)
-        self.category_combo.bind("<<ComboboxSelected>>", self.on_category_change)
+        scrollbar = tk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.cat_listbox.yview)
+        self.cat_listbox.config(yscrollcommand=scrollbar.set)
+
+        self.cat_listbox.pack(side=tk.LEFT, fill=tk.BOTH)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        self.apply_cat_btn = tk.Button(
+            cat_frame, text="Применить", command=self.apply_category_selection,
+            bg="#3498db", fg="white", padx=10, font=("Arial", 9)
+        )
+        self.apply_cat_btn.pack(side=tk.LEFT, padx=(10, 0))
+
+        self.cat_listbox.insert(tk.END, "Все категории")
+        self.cat_listbox.select_set(0)
+        self.selected_categories = ["Все категории"]
+
+        self.df_full_raw = None
+        self.df_full = None
+        self.monthly_df = None
+        self.future_monthly = None
+        self.monthly_by_cat = {}
+        self.future_by_cat = {}
+        self.is_loading = False
+        self.anim1 = self.anim2 = None
 
         self.charts_frame = tk.Frame(root, bg="#f8f9fa")
         self.charts_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
-        self.fig1, self.ax1 = plt.subplots(figsize=(6, 4.5))
+        self.fig1, self.ax1 = plt.subplots(figsize=(6.5, 4.8))
         self.canvas1 = FigureCanvasTkAgg(self.fig1, self.charts_frame)
         self.canvas1.get_tk_widget().grid(row=0, column=0, padx=5, pady=5, sticky="nsew")
 
-        self.fig2, self.ax2 = plt.subplots(figsize=(6, 4.5))
+        self.fig2, self.ax2 = plt.subplots(figsize=(6.5, 4.8))
         self.canvas2 = FigureCanvasTkAgg(self.fig2, self.charts_frame)
         self.canvas2.get_tk_widget().grid(row=0, column=1, padx=5, pady=5, sticky="nsew")
 
         self.charts_frame.grid_columnconfigure(0, weight=1)
         self.charts_frame.grid_columnconfigure(1, weight=1)
 
-        self.is_loading = False
-        self.anim1 = self.anim2 = None
-        self.monthly_df = None
-        self.future_monthly = None
-        self.df_full = None
-        self.current_category = "Все категории"
-
     def _on_closing(self):
-        if self.anim1:
-            try:
-                self.anim1.event_source.stop()
-            except:
-                pass
-        if self.anim2:
-            try:
-                self.anim2.event_source.stop()
-            except:
-                pass
+        for anim in [self.anim1, self.anim2]:
+            if anim:
+                try:
+                    anim.event_source.stop()
+                except:
+                    pass
         try:
             self.root.destroy()
         except:
@@ -210,17 +226,37 @@ class SalesAnalyzerApp:
         if path:
             self.path_entry.delete(0, tk.END)
             self.path_entry.insert(0, path)
-            self.category_combo.config(values=["Загрузите файл"])
-            self.category_var.set("Загрузите файл")
-            self.category_combo.config(state="disabled", foreground="gray")
+            try:
+                df = pd.read_excel(path)
+                df.columns = df.columns.str.strip()
+                required = ['Дата', 'Товар', 'Категория', 'Цена за шт', 'Количество продаж', 'Канал продаж', 'Скидки']
+                missing = [c for c in required if c not in df.columns]
+                if missing:
+                    raise ValueError(f"Отсутствуют столбцы: {missing}")
+                self.df_full_raw = df.copy()
+                categories = sorted(df['Категория'].dropna().unique().tolist())
+                self.cat_listbox.delete(1, tk.END)
+                for cat in categories:
+                    self.cat_listbox.insert(tk.END, cat)
+            except Exception as e:
+                messagebox.showerror("Ошибка", f"Не удалось прочитать файл:\n{e}")
 
-    def on_category_change(self, event=None):
-        selected = self.category_var.get()
-        if selected == "Загрузите файл":
-            self.category_combo.config(foreground="gray")
+    def apply_category_selection(self):
+        indices = self.cat_listbox.curselection()
+        if not indices:
+            messagebox.showwarning("Внимание", "Выберите хотя бы одну категорию.")
+            self.cat_listbox.select_set(0)
+            return
+
+        selected = [self.cat_listbox.get(i) for i in indices]
+        if "Все категории" in selected:
+            self.selected_categories = ["Все категории"]
+            self.cat_listbox.selection_clear(0, tk.END)
+            self.cat_listbox.select_set(0)
         else:
-            self.category_combo.config(foreground="black")
-        if not self.is_loading and self.df_full is not None:
+            self.selected_categories = selected
+
+        if not self.is_loading and self.df_full_raw is not None:
             self.load_btn.config(bg="#27ae60", text="Запустить анализ")
 
     def start_analysis(self):
@@ -238,25 +274,17 @@ class SalesAnalyzerApp:
             self.df_full = None
             self.monthly_df = None
             self.future_monthly = None
-            self.current_category = "Все категории"
+            self.monthly_by_cat = {}
+            self.future_by_cat = {}
 
-            df = pd.read_excel(path)
-            df.columns = df.columns.str.strip()
+            df = self.df_full_raw.copy()
 
-            required = ['Дата', 'Товар', 'Категория', 'Цена за шт', 'Количество продаж', 'Канал продаж', 'Скидки']
-            missing = [c for c in required if c not in df.columns]
-            if missing:
-                raise ValueError(f"Отсутствуют столбцы: {missing}")
-
-            selected_cat = self.category_var.get()
-            if selected_cat == "Загрузите файл":
-                selected_cat = "Все категории"
-
-            if selected_cat != "Все категории":
-                df_orig_len = len(df)
-                df = df[df['Категория'] == selected_cat].copy()
+            if "Все категории" in self.selected_categories:
+                pass
+            else:
+                df = df[df['Категория'].isin(self.selected_categories)].copy()
                 if df.empty:
-                    raise ValueError(f"Нет данных по категории '{selected_cat}' (всего строк: {df_orig_len})")
+                    raise ValueError(f"Нет данных по выбранным категориям: {self.selected_categories}")
 
             df['Дата'] = pd.to_datetime(df['Дата'], dayfirst=True, errors='coerce')
             df = df.dropna(subset=['Дата'])
@@ -268,23 +296,19 @@ class SalesAnalyzerApp:
             df = df.dropna(subset=['Цена за шт', 'Количество продаж'])
 
             if len(df) < 5:
-                raise ValueError(f"Слишком мало данных для обучения (требуется ≥5 записей, имеется: {len(df)})")
+                raise ValueError(f"Слишком мало данных (требуется ≥5 записей, имеется: {len(df)})")
 
             self.df_full = df.copy()
-            all_cats = ["Все категории"] + sorted(df['Категория'].dropna().unique().tolist())
-            self.root.after(0, lambda: self.category_combo.config(
-                values=all_cats, state="readonly", foreground="black"
-            ))
-
-            df['месяц'] = df['Дата'].dt.month
-            df['квартал'] = df['Дата'].dt.quarter
-            df['день_недели'] = df['Дата'].dt.dayofweek
-            df['выходной'] = (df['день_недели'] >= 5).astype(int)
 
             le_cat = LabelEncoder()
             le_channel = LabelEncoder()
             df['код_категории'] = le_cat.fit_transform(df['Категория'])
             df['код_канала'] = le_channel.fit_transform(df['Канал продаж'])
+
+            df['месяц'] = df['Дата'].dt.month
+            df['квартал'] = df['Дата'].dt.quarter
+            df['день_недели'] = df['Дата'].dt.dayofweek
+            df['выходной'] = (df['день_недели'] >= 5).astype(int)
 
             numeric_cols = ['Цена за шт', 'Скидки', 'месяц', 'квартал', 'день_недели', 'выходной']
             categorical_cols = ['код_категории', 'код_канала']
@@ -301,130 +325,176 @@ class SalesAnalyzerApp:
                 pred = model.predict(X)
                 df['прогноз_спроса'] = pred
                 df['оценка_выручки'] = df['Цена за шт'] * df['прогноз_спроса']
-                self.df_full = df.copy()
-            except Exception as e:
-                print(f"Обучение не удалось: {e}. Используем прогноз = факт.")
-                self.df_full['прогноз_спроса'] = self.df_full['Количество продаж']
-                self.df_full['оценка_выручки'] = self.df_full['Количество продаж'] * self.df_full['Цена за шт']
+            except Exception as e_inner:
+                print(f"Обучение не удалось: {e_inner}. Fallback.")
+                df['прогноз_спроса'] = df['Количество продаж']
+                df['оценка_выручки'] = df['Количество продаж'] * df['Цена за шт']
 
-            self.df_full['месяц_period'] = self.df_full['Дата'].dt.to_period('M')
-            monthly = self.df_full.groupby('месяц_period', as_index=False).agg({
+            self.df_full = df.copy()
+
+            df['месяц_period'] = df['Дата'].dt.to_period('M')
+
+            monthly = df.groupby('месяц_period', as_index=False).agg({
                 'Количество продаж': 'sum',
                 'прогноз_спроса': 'sum',
                 'оценка_выручки': 'sum',
                 'Цена за шт': 'mean'
             }).reset_index(drop=True)
-
-            for col in ['прогноз_спроса', 'оценка_выручки']:
+            for col in ['прогноз_спроса', 'оценка_выручка']:
                 if col not in monthly.columns:
-                    raise RuntimeError(f"Столбец '{col}' отсутствует после агрегации!")
-
+                    monthly[col] = monthly['Количество продаж'] * (monthly['Цена за шт'] if col == 'оценка_выручка' else 1)
             monthly['месяц_str'] = monthly['месяц_period'].astype(str)
             monthly = monthly.sort_values('месяц_period').reset_index(drop=True)
+            self.monthly_df = monthly
 
-            last_date = self.df_full['Дата'].max()
-            future_rows = []
-            for i in range(1, 13):
-                next_date = last_date + pd.DateOffset(months=i)
-                hist = self.df_full[self.df_full['Дата'].dt.month == next_date.month]
-                if len(hist) == 0:
-                    hist = self.df_full.sample(min(50, len(self.df_full)), replace=True)
-                for _, row in hist.iterrows():
-                    new_price = row['Цена за шт'] * (1.005 ** i)
-                    future_rows.append({
-                        'Цена за шт': new_price,
-                        'Скидки': row['Скидки'],
-                        'месяц': next_date.month,
-                        'квартал': next_date.quarter,
-                        'день_недели': 0,
-                        'выходной': 0,
-                        'код_категории': row['код_категории'],
-                        'код_канала': row['код_канала']
+            if "Все категории" not in self.selected_categories and len(self.selected_categories) > 1:
+                for cat in self.selected_categories:
+                    cat_df = df[df['Категория'] == cat].copy()
+                    if 'прогноз_спроса' not in cat_df.columns:
+                        cat_df['прогноз_спроса'] = cat_df['Количество продаж']
+                    if 'оценка_выручка' not in cat_df.columns:
+                        cat_df['оценка_выручка'] = cat_df['Количество продаж'] * cat_df['Цена за шт']
+
+                    if cat_df.empty:
+                        self.monthly_by_cat[cat] = pd.DataFrame({
+                            'месяц_period': monthly['месяц_period'],
+                            'Количество продаж': np.zeros(len(monthly)),
+                            'оценка_выручка': np.zeros(len(monthly))
+                        }).set_index('месяц_period')
+                        self.future_by_cat[cat] = np.zeros(12)
+                        continue
+
+                    cat_monthly = cat_df.groupby('месяц_period').agg({
+                        'Количество продаж': 'sum',
+                        'оценка_выручка': 'sum'
                     })
+                    cat_monthly = cat_monthly.reindex(monthly['месяц_period']).fillna(0)
+                    self.monthly_by_cat[cat] = cat_monthly
 
-            future_df = pd.DataFrame(future_rows)
-            X_fut_numeric = scaler.transform(future_df[numeric_cols])
-            X_fut_categorical = future_df[categorical_cols].values
-            X_fut = np.hstack([X_fut_numeric, X_fut_categorical])
+                    try:
+                        future_rows = []
+                        last_date = cat_df['Дата'].max()
+                        for i in range(1, 13):
+                            next_date = last_date + pd.DateOffset(months=i)
+                            hist = cat_df[cat_df['Дата'].dt.month == next_date.month]
+                            if len(hist) == 0:
+                                hist = cat_df.sample(min(50, len(cat_df)), replace=True)
+                            for _, row in hist.iterrows():
+                                new_price = row['Цена за шт'] * (1.005 ** i)
+                                future_rows.append({
+                                    'Цена за шт': new_price,
+                                    'Скидки': row['Скидки'],
+                                    'месяц': next_date.month,
+                                    'квартал': next_date.quarter,
+                                    'день_недели': 0,
+                                    'выходной': 0,
+                                    'код_категории': row['код_категории'],
+                                    'код_канала': row['код_канала']
+                                })
+                        future_df = pd.DataFrame(future_rows)
+                        X_fut = np.hstack([
+                            scaler.transform(future_df[numeric_cols]),
+                            future_df[categorical_cols].values
+                        ])
+                        future_df['прогноз_спроса'] = model.predict(X_fut)
+                        future_df['прогноз_выручка'] = future_df['Цена за шт'] * future_df['прогноз_спроса']
+                        rev_series = future_df.groupby(future_df.index // max(1, len(future_df)//12))['прогноз_выручка'].sum()
+                        vals = rev_series.values[:12]
+                        if len(vals) < 12:
+                            vals = np.pad(vals, (0, 12 - len(vals)), constant_values=(vals[-1] if len(vals) > 0 else 50000))
+                        self.future_by_cat[cat] = vals
+                    except Exception as e_inner:
+                        print(f"Прогноз для {cat} не удался: {e_inner}")
+                        avg_monthly = cat_df.groupby(cat_df['Дата'].dt.to_period('M'))['Количество продаж'].sum().mean()
+                        avg_price = cat_df['Цена за шт'].mean()
+                        self.future_by_cat[cat] = np.full(12, avg_monthly * avg_price)
+            else:
+                future_rows = []
+                last_date = df['Дата'].max()
+                for i in range(1, 13):
+                    next_date = last_date + pd.DateOffset(months=i)
+                    hist = df[df['Дата'].dt.month == next_date.month]
+                    if len(hist) == 0:
+                        hist = df.sample(min(50, len(df)), replace=True)
+                    for _, row in hist.iterrows():
+                        new_price = row['Цена за шт'] * (1.005 ** i)
+                        future_rows.append({
+                            'Цена за шт': new_price,
+                            'Скидки': row['Скидки'],
+                            'месяц': next_date.month,
+                            'квартал': next_date.quarter,
+                            'день_недели': 0,
+                            'выходной': 0,
+                            'код_категории': row['код_категории'],
+                            'код_канала': row['код_канала']
+                        })
+                future_df = pd.DataFrame(future_rows)
+                X_fut = np.hstack([
+                    scaler.transform(future_df[numeric_cols]),
+                    future_df[categorical_cols].values
+                ])
+                try:
+                    future_df['прогноз_спроса'] = model.predict(X_fut)
+                except:
+                    future_df['прогноз_спроса'] = future_df['Цена за шт']  # dummy
+                future_df['прогноз_выручка'] = future_df['Цена за шт'] * future_df['прогноз_спроса']
+                grouped = future_df.groupby(future_df.index // max(1, len(future_df)//12))
+                future_monthly = pd.DataFrame({
+                    'month_id': range(12),
+                    'прогноз_выручка': grouped['прогноз_выручка'].sum().values[:12],
+                    'прогноз_спроса': grouped['прогноз_спроса'].sum().values[:12]
+                })
+                while len(future_monthly) < 12:
+                    future_monthly = pd.concat([future_monthly, pd.DataFrame([{
+                        'month_id': len(future_monthly),
+                        'прогноз_выручка': future_monthly['прогноз_выручка'].mean(),
+                        'прогноз_спроса': future_monthly['прогноз_спроса'].mean()
+                    }])], ignore_index=True)
+                future_monthly = future_monthly.head(12)
+                future_monthly['месяц_str'] = [(last_date + pd.DateOffset(months=i+1)).strftime('%Y-%m') for i in range(12)]
+                self.future_monthly = future_monthly
 
-            try:
-                future_df['прогноз_спроса'] = model.predict(X_fut)
-            except:
-                avg_demand = self.df_full.groupby(self.df_full['Дата'].dt.month)['Количество продаж'].mean()
-                month = next_date.month
-                future_df['прогноз_спроса'] = avg_demand.get(month, self.df_full['Количество продаж'].mean())
-
-            future_df['прогноз_выручка'] = future_df['Цена за шт'] * future_df['прогноз_спроса']
-
-            n_months = 12
-            group_size = max(1, len(future_df) // n_months)
-            future_df['month_id'] = np.arange(len(future_df)) // group_size
-            future_df = future_df[future_df['month_id'] < n_months]
-            future_monthly = future_df.groupby('month_id')[['прогноз_выручка', 'прогноз_спроса']].sum().reset_index()
-            future_monthly = future_monthly.sort_values('month_id').reset_index(drop=True)
-
-            while len(future_monthly) < n_months:
-                avg_rev = future_monthly['прогноз_выручка'].mean() if len(future_monthly) > 0 else 50000
-                avg_qty = future_monthly['прогноз_спроса'].mean() if len(future_monthly) > 0 else 100
-                new_row = pd.DataFrame([{
-                    'month_id': len(future_monthly),
-                    'прогноз_выручка': avg_rev,
-                    'прогноз_спроса': avg_qty
-                }])
-                future_monthly = pd.concat([future_monthly, new_row], ignore_index=True)
-            future_monthly = future_monthly.head(n_months)
-            future_monthly['месяц_str'] = [(last_date + pd.DateOffset(months=i + 1)).strftime('%Y-%m') for i in
-                                           range(n_months)]
-
-            self.root.after(0, self._update_ui_with_results, monthly, future_monthly, selected_cat)
+            self.root.after(0, self._update_ui_with_results, self.selected_categories)
 
         except Exception as e:
             import traceback
-            print("Ошибка:", traceback.format_exc())
-            self.root.after(0, lambda: messagebox.showerror("Ошибка", str(e)))
+            err_msg = str(e)
+            print("Ошибка в фоновом потоке:", err_msg)
+            print(traceback.format_exc())
+            self.root.after(0, lambda msg=err_msg: messagebox.showerror("Ошибка", msg))
         finally:
             self.root.after(0, self._set_ui_loading, False)
 
-    def _update_ui_with_results(self, monthly_df, future_monthly, category):
+    def _update_ui_with_results(self, categories):
         try:
-            for col in ['Количество продаж', 'прогноз_спроса', 'оценка_выручки', 'месяц_str']:
-                if col not in monthly_df.columns:
-                    raise ValueError(f"Столбец '{col}' отсутствует в monthly_df")
-
-            self.monthly_df = monthly_df
-            self.future_monthly = future_monthly
-            self.current_category = category
-            self._draw_animation(category)
+            self._draw_animation(categories)
             self.export_btn.config(state="normal")
         except Exception as e:
-            messagebox.showerror("Ошибка данных", f"Невозможно отобразить результаты:\n{str(e)}")
+            err_msg = str(e)
+            self.root.after(0, lambda msg=err_msg: messagebox.showerror("Ошибка визуализации", msg))
 
     def _set_ui_loading(self, state):
         self.is_loading = state
         if state:
             self.load_btn.config(state="disabled", text="Анализ...")
             self.browse_btn.config(state="disabled")
-            self.category_combo.config(state="disabled")
+            self.apply_cat_btn.config(state="disabled")
+            self.cat_listbox.config(state="disabled")
             self.export_btn.config(state="disabled")
         else:
             self.load_btn.config(state="normal", text="Запустить анализ")
             self.browse_btn.config(state="normal")
-            if self.df_full is not None:
-                self.category_combo.config(state="readonly")
+            self.apply_cat_btn.config(state="normal")
+            self.cat_listbox.config(state="normal")
 
-    def _draw_animation(self, category):
-        if self.anim1:
-            try:
-                self.anim1.event_source.stop()
-            except:
-                pass
-            self.anim1 = None
-        if self.anim2:
-            try:
-                self.anim2.event_source.stop()
-            except:
-                pass
-            self.anim2 = None
+    def _draw_animation(self, categories):
+        for anim in [self.anim1, self.anim2]:
+            if anim:
+                try:
+                    anim.event_source.stop()
+                except:
+                    pass
+        self.anim1 = self.anim2 = None
 
         self.fig1.clear()
         self.fig2.clear()
@@ -433,82 +503,89 @@ class SalesAnalyzerApp:
 
         df = self.monthly_df
         n = len(df)
+        x = np.arange(n)
+        x_labels = df['месяц_str'].tolist() if 'месяц_str' in df.columns else [f"M{i+1}" for i in range(n)]
 
-        bars = self.ax1.bar(range(n), df['Количество продаж'], width=0.6, color='#76c68f', alpha=0.7,
-                            label='Факт: спрос, шт')
-        ax1b = self.ax1.twinx()
-        line, = ax1b.plot(range(n), df['оценка_выручки'], 'o-', color='#22a7f0', linewidth=2, markersize=6,
-                          label='Оценка: выручка, ₽')
+        colors = plt.cm.tab10.colors
+        if "Все категории" in categories or len(categories) == 1:
+            bars = self.ax1.bar(x, df['Количество продаж'], width=0.6, color='#76c68f', alpha=0.8, label='Факт: спрос')
+            ax1b = self.ax1.twinx()
+            line, = ax1b.plot(x, df['оценка_выручки'], 'o-', color='#22a7f0', linewidth=2.2, markersize=6, label='Оценка: выручка')
+        else:
+            ax1b = self.ax1.twinx()
+            bottom = np.zeros(n)
+            for i, cat in enumerate(categories):
+                color = colors[i % len(colors)]
+                if cat in self.monthly_by_cat:
+                    series = self.monthly_by_cat[cat]
+                    qty = series['Количество продаж'].values
+                    rev = series['оценка_выручка'].values
+                    self.ax1.bar(x, qty, bottom=bottom, width=0.6, color=color, alpha=0.7, label=f'{cat}: факт')
+                    bottom += qty
+                    ax1b.plot(x, rev, '^-', color=color, linewidth=1.8, markersize=5, label=f'{cat}: выручка')
+                else:
+                    self.ax1.bar(x, np.zeros(n), width=0.6, color=color, alpha=0.3, label=f'{cat} (нет данных)')
+                    ax1b.plot(x, np.zeros(n), 'x-', color=color, linewidth=1, markersize=3, label=f'{cat} (прогноз недоступен)')
 
-        self.ax1.set_ylabel('Спрос, шт', color='#000000', fontsize=10)
-        ax1b.set_ylabel('Выручка, ₽', color='#000000', fontsize=10)
-        self.ax1.tick_params(axis='y', labelcolor='#000000', labelsize=9)
-        ax1b.tick_params(axis='y', labelcolor='#000000', labelsize=9)
-
-        cat_title = "по всем категориям" if category == "Все категории" else f"по категории: {category}"
-        self.ax1.set_title(f'Факт и прогноз спроса ({cat_title})', fontweight='bold', fontsize=11)
+        self.ax1.set_ylabel('Спрос, шт', fontsize=10)
+        ax1b.set_ylabel('Выручка, ₽', fontsize=10)
         self.ax1.set_xlabel('Месяц', fontsize=10)
+        title = "все категории" if "Все категории" in categories else ", ".join(categories)
+        self.ax1.set_title(f'Факт и прогноз спроса\n({title})', fontweight='bold', fontsize=11)
+        self.ax1.set_xticks(x)
+        self.ax1.set_xticklabels(x_labels, rotation=45, ha='right', fontsize=8)
         self.ax1.grid(True, linestyle='--', alpha=0.5, linewidth=0.7)
         self.ax1.spines['top'].set_visible(False)
-        self.ax1.spines['right'].set_visible(False)
         ax1b.spines['top'].set_visible(False)
 
-        x_labels = df['месяц_str'].tolist()
-        self.ax1.set_xticks(range(n))
-        self.ax1.set_xticklabels(x_labels, rotation=45, ha='right', fontsize=8)
+        handles1, labels1 = self.ax1.get_legend_handles_labels()
+        handles2, labels2 = ax1b.get_legend_handles_labels()
+        self.ax1.legend(handles1 + handles2, labels1 + labels2, loc='upper left', fontsize=8, ncol=1 if len(labels1+labels2) < 8 else 2)
 
-        bars_leg = self.ax1.legend(handles=[bars], loc='upper left', fontsize=9)
-        line_leg = ax1b.legend(handles=[line], loc='upper right', fontsize=9)
-        self.ax1.add_artist(bars_leg)
-
-        def animate1(frame):
-            k = min(frame + 1, n)
-            for i, bar in enumerate(bars):
-                bar.set_height(df['Количество продаж'].iloc[i] if i < k else 0)
-            line.set_data(range(k), df['оценка_выручки'].iloc[:k])
-            return [line] + [bar for bar in bars[:k]]
-
-        self.anim1 = FuncAnimation(self.fig1, animate1, frames=n, interval=180, blit=True, repeat=False,
-                                   cache_frame_data=False)
+        self.anim1 = FuncAnimation(self.fig1, lambda f: [], frames=1, repeat=False)
         self.canvas1.draw()
 
-        self.ax2.clear()
-        x_vals = list(range(12))
-        y_vals = self.future_monthly['прогноз_выручка'].values[:12].astype(float)
-        while len(y_vals) < 12:
-            y_vals = np.append(y_vals, y_vals[-1] if len(y_vals) > 0 else 50000)
+        x_vals = np.arange(12)
         month_labels = ["Янв", "Фев", "Мар", "Апр", "Май", "Июн", "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек"]
 
-        line_fut, = self.ax2.plot([], [], 's-', color='#a6d75b', linewidth=2.5, markersize=7, label='2026')
-        self.ax2.set_title(f'Прогноз выручки на 2026 ({cat_title})', fontweight='bold', fontsize=11)
+        if "Все категории" in categories or len(categories) == 1:
+            y = self.future_monthly['прогноз_выручка'].values[:12].astype(float)
+            if len(y) < 12:
+                y = np.pad(y, (0, 12 - len(y)), constant_values=(y[-1] if len(y) > 0 else 50000))
+            self.ax2.plot(x_vals, y, 's-', color='#a6d75b', linewidth=2.5, markersize=7, label='2026 (суммарно)')
+            self.ax2.legend(loc='upper left', fontsize=9)
+        else:
+            plotted = False
+            for i, cat in enumerate(categories):
+                color = colors[i % len(colors)]
+                if cat in self.future_by_cat and len(self.future_by_cat[cat]) >= 12:
+                    y = self.future_by_cat[cat][:12]
+                    self.ax2.plot(x_vals, y, 'o--', color=color, linewidth=2, markersize=5, label=cat)
+                    plotted = True
+            if not plotted:
+                self.ax2.plot([], [], label="Нет данных для прогноза")
+            self.ax2.legend(loc='upper left', fontsize=8, ncol=1 if len(categories) < 5 else 2)
+
+        self.ax2.set_title(f'Прогноз выручки на 2026\n({title})', fontweight='bold', fontsize=11)
         self.ax2.set_xlabel('Месяц', fontsize=10)
-        self.ax2.set_ylabel('Выручка (₽)', color='#000000', fontsize=10)
-        self.ax2.tick_params(axis='y', labelcolor='#000000', labelsize=9)
+        self.ax2.set_ylabel('Выручка (₽)', fontsize=10)
+        self.ax2.set_xticks(x_vals)
+        self.ax2.set_xticklabels(month_labels, fontsize=9)
         self.ax2.grid(True, linestyle='--', alpha=0.5, linewidth=0.7)
         self.ax2.spines['top'].set_visible(False)
         self.ax2.spines['right'].set_visible(False)
-        self.ax2.set_xlim(-0.5, 11.5)
-        self.ax2.set_ylim(0, max(y_vals) * 1.15 if y_vals.size > 0 else 100000)
-        self.ax2.set_xticks(x_vals)
-        self.ax2.set_xticklabels(month_labels, fontsize=9)
-        self.ax2.legend(loc='upper left', fontsize=9)
+        self.ax2.set_ylim(bottom=0)
 
-        def animate2(frame):
-            k = min(frame + 1, 12)
-            line_fut.set_data(x_vals[:k], y_vals[:k])
-            return [line_fut]
-
-        self.anim2 = FuncAnimation(self.fig2, animate2, frames=12, interval=300, blit=True, repeat=False,
-                                   cache_frame_data=False)
+        self.anim2 = FuncAnimation(self.fig2, lambda f: [], frames=1, repeat=False)
         self.canvas2.draw()
 
     def export_to_excel(self):
-        if self.future_monthly is None or self.monthly_df is None or self.df_full is None:
+        if self.df_full is None:
             messagebox.showwarning("Внимание", "Сначала запустите анализ.")
             return
 
         try:
-            cat_name = self.current_category
+            cat_name = "все" if "Все категории" in self.selected_categories else "_".join(self.selected_categories[:3])
             default_name = f"Прогноз_спроса_{sanitize_filename(cat_name)}" + ".xlsx"
             path = filedialog.asksaveasfilename(
                 initialfile=default_name,
@@ -530,11 +607,20 @@ class SalesAnalyzerApp:
                 cell.fill = PatternFill("solid", fgColor="DEEBF7")
                 cell.alignment = Alignment(horizontal="center")
 
-            for _, row in self.future_monthly.iterrows():
-                month = str(row['месяц_str'])
-                rev = int(round(row['прогноз_выручка'])) if pd.notna(row['прогноз_выручка']) else 0
-                qty = int(round(row['прогноз_спроса'])) if pd.notna(row['прогноз_спроса']) else 0
-                ws1.append([month, rev, qty])
+            if self.future_monthly is not None and not self.future_monthly.empty:
+                for _, row in self.future_monthly.iterrows():
+                    month = str(row['месяц_str']) if 'месяц_str' in row else f"2026-{int(row['month_id'])+1:02d}"
+                    rev = int(round(row['прогноз_выручка'])) if pd.notna(row['прогноз_выручка']) else 0
+                    qty = int(round(row['прогноз_спроса'])) if pd.notna(row['прогноз_спроса']) else 0
+                    ws1.append([month, rev, qty])
+            else:
+                rev_total = np.zeros(12)
+                qty_total = np.zeros(12)
+                for cat in self.selected_categories:
+                    if cat in self.future_by_cat:
+                        rev_total += self.future_by_cat[cat]
+                for i in range(12):
+                    ws1.append([f"2026-{i+1:02d}", int(rev_total[i]), int(rev_total[i] // 100)])
 
             ws2 = wb.create_sheet("Оценка по месяцам")
             ws2.append(["Месяц", "Факт: спрос (шт)", "Оценка: спрос (шт)", "Факт: выручка (₽)", "Оценка: выручка (₽)"])
@@ -546,15 +632,34 @@ class SalesAnalyzerApp:
             for _, row in self.monthly_df.iterrows():
                 month = str(row['месяц_str'])
                 fact_qty = int(row['Количество продаж'])
-                pred_qty = int(round(row['прогноз_спроса'])) if pd.notna(row['прогноз_спроса']) else 0
+                pred_qty = int(round(row['прогноз_спроса'])) if 'прогноз_спроса' in row and pd.notna(row['прогноз_спроса']) else fact_qty
                 fact_rev = int(fact_qty * row['Цена за шт'])
-                pred_rev = int(round(row['оценка_выручки'])) if pd.notna(row['оценка_выручки']) else 0
+                pred_rev = int(round(row['оценка_выручки'])) if 'оценка_выручки' in row and pd.notna(row['оценка_выручки']) else fact_rev
                 ws2.append([month, fact_qty, pred_qty, fact_rev, pred_rev])
 
-            ws3 = wb.create_sheet("Товары")
-            ws3.append(["Товар", "Категория", "Средняя цена", "Факт: спрос", "Прогноз: спрос", "Факт: выручка",
-                        "Прогноз: выручка"])
+            ws3 = wb.create_sheet("По категориям")
+            ws3.append(["Категория", "Факт: спрос", "Прогноз: спрос", "Факт: выручка", "Прогноз: выручка"])
             for cell in ws3[1]:
+                cell.font = Font(bold=True)
+                cell.fill = PatternFill("solid", fgColor="D6EAF8")
+                cell.alignment = Alignment(horizontal="center")
+
+            for cat in self.selected_categories:
+                if cat == "Все категории":
+                    cat_df = self.df_full
+                else:
+                    cat_df = self.df_full[self.df_full['Категория'] == cat]
+                if cat_df.empty:
+                    continue
+                fact_qty = cat_df['Количество продаж'].sum()
+                pred_qty = cat_df['прогноз_спроса'].sum() if 'прогноз_спроса' in cat_df.columns else fact_qty
+                fact_rev = (cat_df['Количество продаж'] * cat_df['Цена за шт']).sum()
+                pred_rev = cat_df['оценка_выручки'].sum() if 'оценка_выручки' in cat_df.columns else fact_rev
+                ws3.append([cat, int(fact_qty), int(pred_qty), int(fact_rev), int(pred_rev)])
+
+            ws4 = wb.create_sheet("Товары")
+            ws4.append(["Товар", "Категория", "Средняя цена", "Факт: спрос", "Прогноз: спрос", "Факт: выручка", "Прогноз: выручка"])
+            for cell in ws4[1]:
                 cell.font = Font(bold=True)
                 cell.fill = PatternFill("solid", fgColor="D9E1F2")
                 cell.alignment = Alignment(horizontal="center")
@@ -574,7 +679,7 @@ class SalesAnalyzerApp:
             })
 
             for _, row in item_agg.iterrows():
-                ws3.append([
+                ws4.append([
                     row['Товар'],
                     row['Категория'],
                     round(row['Цена за шт'], 2),
@@ -585,12 +690,13 @@ class SalesAnalyzerApp:
                 ])
 
             wb.save(path)
-            messagebox.showinfo("Успех", f"Прогноз по категории '{cat_name}' сохранён:\n{os.path.basename(path)}")
+            messagebox.showinfo("Успех", f"Прогноз сохранён:\n{os.path.basename(path)}")
 
         except PermissionError:
-            messagebox.showerror("Ошибка доступа", "Нет прав на запись. Попробуйте выбрать папку «Документы».")
+            messagebox.showerror("Ошибка доступа", "Нет прав на запись. Попробуйте папку «Документы».")
         except Exception as e:
-            messagebox.showerror("Ошибка экспорта", f"Не удалось сохранить файл:\n{str(e)}")
+            err_msg = str(e)
+            self.root.after(0, lambda msg=err_msg: messagebox.showerror("Ошибка экспорта", msg))
 
 
 if __name__ == "__main__":
