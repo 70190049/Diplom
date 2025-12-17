@@ -520,15 +520,21 @@ class SalesAnalyzerApp:
 
         n = len(df)
         x = np.arange(n)
-        x_labels = df['месяц_str'].tolist() if 'месяц_str' in df.columns else [f"M{i+1}" for i in range(n)]
-
+        x_labels = df['месяц_str'].tolist() if 'месяц_str' in df.columns else [f"M{i + 1}" for i in range(n)]
         colors = plt.cm.tab10.colors
+        title = "все категории" if "Все категории" in categories else ", ".join(categories)
+
+        ax1b = self.ax1.twinx()
+        self.anim_bars = []
+        self.anim_lines1 = []
+
         if "Все категории" in categories or len(categories) == 1:
-            bars = self.ax1.bar(x, df['Количество продаж'], width=0.6, color='#76c68f', alpha=0.8, label='Факт: спрос')
-            ax1b = self.ax1.twinx()
-            line, = ax1b.plot(x, df['оценка_выручки'], 'o-', color='#22a7f0', linewidth=2.2, markersize=6, label='Оценка: выручка')
+            bars = self.ax1.bar(x, df['Количество продаж'], width=0.6, color='#76c68f', alpha=0.0, label='Факт: спрос')
+            line, = ax1b.plot(x, df['оценка_выручка'], 'o-', color='#22a7f0', linewidth=2.2, markersize=6,
+                              alpha=0.0, label='Оценка: выручка')
+            self.anim_bars = [bars]
+            self.anim_lines1 = [line]
         else:
-            ax1b = self.ax1.twinx()
             bottom = np.zeros(n)
             for i, cat in enumerate(categories):
                 color = colors[i % len(colors)]
@@ -536,72 +542,57 @@ class SalesAnalyzerApp:
                     series = self.monthly_by_cat[cat]
                     qty = series['Количество продаж'].values
                     rev = series['оценка_выручка'].values
-                    self.ax1.bar(x, qty, bottom=bottom, width=0.6, color=color, alpha=0.7, label=f'{cat}: факт')
-                    bottom += qty
-                    ax1b.plot(x, rev, '^-', color=color, linewidth=1.8, markersize=5, label=f'{cat}: выручка')
                 else:
-                    self.ax1.bar(x, np.zeros(n), width=0.6, color=color, alpha=0.3, label=f'{cat} (нет данных)')
-                    ax1b.plot(x, np.zeros(n), 'x-', color=color, linewidth=1, markersize=3, label=f'{cat} (прогноз недоступен)')
+                    qty = np.zeros(n)
+                    rev = np.zeros(n)
+                bars = self.ax1.bar(x, qty, bottom=bottom, width=0.6, color=color, alpha=0.0,
+                                    label=f'{cat}: факт')
+                line, = ax1b.plot(x, rev, '^-', color=color, linewidth=1.8, markersize=5,
+                                  alpha=0.0, label=f'{cat}: выручка')
+                self.anim_bars.append(bars)
+                self.anim_lines1.append(line)
+                bottom += qty
 
         self.ax1.set_ylabel('Спрос, шт', fontsize=10)
         ax1b.set_ylabel('Выручка, ₽', fontsize=10)
         self.ax1.set_xlabel('Месяц', fontsize=10)
-        title = "все категории" if "Все категории" in categories else ", ".join(categories)
         self.ax1.set_title(f'Факт и прогноз спроса\n({title})', fontweight='bold', fontsize=11)
         self.ax1.set_xticks(x)
         self.ax1.set_xticklabels(x_labels, rotation=45, ha='right', fontsize=8)
         self.ax1.grid(True, linestyle='--', alpha=0.5, linewidth=0.7)
         self.ax1.spines['top'].set_visible(False)
         ax1b.spines['top'].set_visible(False)
+        self.ax1.set_ylim(bottom=0)
+        ax1b.set_ylim(bottom=0)
+        self.ax1.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{int(x):,}'.replace(',', ' ')))
+        ax1b.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{int(x):,}'.replace(',', ' ')))
 
         handles1, labels1 = self.ax1.get_legend_handles_labels()
         handles2, labels2 = ax1b.get_legend_handles_labels()
         self.ax1.legend(handles1 + handles2, labels1 + labels2, loc='upper left', fontsize=8,
                         ncol=1 if len(labels1 + labels2) < 8 else 2)
 
-        def animate1(frame):
-            if "Все категории" in categories or len(categories) == 1:
-                for rect in bars:
-                    full_h = rect.get_height()
-                    rect.set_height(full_h * min(frame / 10, 1))
-            else:
-                ax_bars = [c for c in self.ax1.containers if hasattr(c, 'get_children')]
-                for bar_container in ax_bars:
-                    for rect in bar_container:
-                        full_h = rect.get_height()
-                        rect.set_height(full_h * min(frame / 10, 1))
-            ax1b_lines = ax1b.get_lines()
-            for line in ax1b_lines:
-                xdata = line.get_xdata()
-                ydata = line.get_ydata()
-                n = len(xdata)
-                k = min(frame, n)
-                line.set_data(xdata[:k], ydata[:k])
-            return []
-
-        self.anim1 = FuncAnimation(self.fig1, animate1, frames=11, interval=80, blit=False, repeat=False)
-        self.canvas1.draw()
-
         x_vals = np.arange(12)
         month_labels = ["Янв", "Фев", "Мар", "Апр", "Май", "Июн", "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек"]
+        self.anim_lines2 = []
 
         if "Все категории" in categories or len(categories) == 1:
             y = self.future_monthly['прогноз_выручка'].values[:12].astype(float)
             if len(y) < 12:
                 y = np.pad(y, (0, 12 - len(y)), constant_values=(y[-1] if len(y) > 0 else 50000))
-            self.ax2.plot(x_vals, y, 's-', color='#a6d75b', linewidth=2.5, markersize=7, label='2026 (суммарно)')
-            self.ax2.legend(loc='upper left', fontsize=9)
+            line, = self.ax2.plot(x_vals, y, 's-', color='#a6d75b', linewidth=2.5, markersize=7,
+                                  alpha=0.0, label='2026 (суммарно)')
+            self.anim_lines2 = [line]
         else:
-            plotted = False
             for i, cat in enumerate(categories):
                 color = colors[i % len(colors)]
                 if cat in self.future_by_cat and len(self.future_by_cat[cat]) >= 12:
                     y = self.future_by_cat[cat][:12]
-                    self.ax2.plot(x_vals, y, 'o--', color=color, linewidth=2, markersize=5, label=cat)
-                    plotted = True
-            if not plotted:
-                self.ax2.plot([], [], label="Нет данных для прогноза")
-            self.ax2.legend(loc='upper left', fontsize=8, ncol=1 if len(categories) < 5 else 2)
+                else:
+                    y = np.zeros(12)
+                line, = self.ax2.plot(x_vals, y, 'o--', color=color, linewidth=2, markersize=5,
+                                      alpha=0.0, label=cat)
+                self.anim_lines2.append(line)
 
         self.ax2.set_title(f'Прогноз выручки на 2026\n({title})', fontweight='bold', fontsize=11)
         self.ax2.set_xlabel('Месяц', fontsize=10)
@@ -612,19 +603,30 @@ class SalesAnalyzerApp:
         self.ax2.spines['top'].set_visible(False)
         self.ax2.spines['right'].set_visible(False)
         self.ax2.set_ylim(bottom=0)
+        self.ax2.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{int(x):,}'.replace(',', ' ')))
+        self.ax2.legend(loc='upper left', fontsize=8, ncol=1 if len(self.anim_lines2) < 5 else 2)
 
-        def animate2(frame):
-            lines = self.ax2.get_lines()
-            for line in lines:
-                xdata = line.get_xdata()
-                ydata = line.get_ydata()
-                n = len(xdata)
-                k = min(frame, n)
-                line.set_data(xdata[:k], ydata[:k])
-            return []
-
-        self.anim2 = FuncAnimation(self.fig2, animate2, frames=13, interval=100, blit=False, repeat=False)
+        self.canvas1.draw()
         self.canvas2.draw()
+
+        steps = 10
+        delay = 60
+
+        def animate_step(step):
+            alpha = step / steps
+            for bars in self.anim_bars:
+                for rect in bars:
+                    rect.set_alpha(alpha)
+            for line in self.anim_lines1:
+                line.set_alpha(alpha)
+            for line in self.anim_lines2:
+                line.set_alpha(alpha)
+            self.canvas1.draw_idle()
+            self.canvas2.draw_idle()
+            if step < steps:
+                self.root.after(delay, animate_step, step + 1)
+
+        self.root.after(100, animate_step, 1)
 
     def export_to_excel(self):
         if self.df_full is None:
