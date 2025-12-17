@@ -6,13 +6,15 @@ from sklearn.preprocessing import LabelEncoder, StandardScaler
 import matplotlib
 matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
+from matplotlib.patches import Patch
+from matplotlib.lines import Line2D
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from matplotlib.animation import FuncAnimation
 import threading
 import os
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment
 import re
+
 
 pd.set_option('future.no_silent_downcasting', True)
 plt.rcParams.update({
@@ -569,8 +571,39 @@ class SalesAnalyzerApp:
 
         handles1, labels1 = self.ax1.get_legend_handles_labels()
         handles2, labels2 = ax1b.get_legend_handles_labels()
-        self.ax1.legend(handles1 + handles2, labels1 + labels2, loc='upper left', fontsize=8,
-                        ncol=1 if len(labels1 + labels2) < 8 else 2)
+        legend_elements = []
+
+        if "Все категории" in categories or len(categories) == 1:
+            bars = self.ax1.containers[0]
+            rect = bars[0]
+            fc = rect.get_facecolor()
+            legend_elements.append(Patch(facecolor=fc, alpha=0.8, label='Факт: спрос'))
+            line = ax1b.get_lines()[0]
+            color = line.get_color()
+            legend_elements.append(Line2D([0], [0], color=color, marker='o', linestyle='-',
+                                          linewidth=2.2, markersize=6, label='Оценка: выручка'))
+        else:
+            for i, cat in enumerate(categories):
+                if i < len(self.ax1.containers):
+                    bars = self.ax1.containers[i]
+                    rect = bars[0]
+                    fc = rect.get_facecolor()
+                    legend_elements.append(Patch(facecolor=fc, alpha=0.7, label=f'{cat}: факт'))
+                if i < len(ax1b.get_lines()):
+                    line = ax1b.get_lines()[i]
+                    color = line.get_color()
+                    legend_elements.append(Line2D([0], [0], color=color, marker='^', linestyle='-',
+                                                  linewidth=1.8, markersize=5, label=f'{cat}: выручка'))
+
+        legend = self.ax1.legend(handles=legend_elements, loc='upper left',
+                                 bbox_to_anchor=(0.0, -0.27),
+                                 fontsize=8,
+                                 ncol=1 if len(legend_elements) < 8 else 2,
+                                 frameon=True)
+        legend.get_frame().set_alpha(0.9)
+        legend.get_frame().set_edgecolor('gray')
+        for artist in legend.get_children():
+            artist.set_animated(False)
 
         x_vals = np.arange(12)
         month_labels = ["Янв", "Фев", "Мар", "Апр", "Май", "Июн", "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек"]
@@ -604,7 +637,31 @@ class SalesAnalyzerApp:
         self.ax2.spines['right'].set_visible(False)
         self.ax2.set_ylim(bottom=0)
         self.ax2.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{int(x):,}'.replace(',', ' ')))
-        self.ax2.legend(loc='upper left', fontsize=8, ncol=1 if len(self.anim_lines2) < 5 else 2)
+        legend2_elements = []
+        if "Все категории" in categories or len(categories) == 1:
+            legend2_elements.append(Line2D([0], [0], color='#a6d75b', marker='s', linestyle='-',
+                                           linewidth=2.5, markersize=7, label='2026 (суммарно)'))
+        else:
+            for i, cat in enumerate(categories):
+                color = colors[i % len(colors)]
+                legend2_elements.append(Line2D([0], [0], color=color, marker='o', linestyle='--',
+                                               linewidth=2, markersize=5, label=cat))
+
+        legend2 = self.ax2.legend(handles=legend2_elements, loc='upper left',
+                                  bbox_to_anchor=(0.0, -0.27),
+                                  fontsize=8,
+                                  ncol=1 if len(legend2_elements) < 5 else 2,
+                                  frameon=True)
+        legend2.get_frame().set_alpha(0.9)
+        legend2.get_frame().set_edgecolor('gray')
+        for artist in legend2.get_children():
+            artist.set_animated(False)
+
+        legend.set_zorder(1000)
+        legend2.set_zorder(1000)
+
+        self.fig1.subplots_adjust(bottom=0.37)
+        self.fig2.subplots_adjust(bottom=0.37)
 
         self.canvas1.draw()
         self.canvas2.draw()
@@ -625,6 +682,8 @@ class SalesAnalyzerApp:
             self.canvas2.draw_idle()
             if step < steps:
                 self.root.after(delay, animate_step, step + 1)
+            else:
+                pass
 
         self.root.after(100, animate_step, 1)
 
