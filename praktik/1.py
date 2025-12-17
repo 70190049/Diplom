@@ -111,7 +111,7 @@ class SalesAnalyzerApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Анализатор продаж")
-        self.root.geometry("1630x680")
+        self.root.geometry("1630x700")
         self.root.configure(bg="#f8f9fa")
         self.root.protocol("WM_DELETE_WINDOW", self._on_closing)
 
@@ -201,6 +201,19 @@ class SalesAnalyzerApp:
 
         self.charts_frame = tk.Frame(root, bg="#f8f9fa")
         self.charts_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+
+        self.stats_frame = tk.Frame(root, bg="#f8f9fa")
+        self.stats_frame.pack(fill=tk.X, padx=20, pady=(0, 10))
+
+        self.stats_label = tk.Label(
+            self.stats_frame,
+            text="",
+            font=("Arial", 11),
+            fg="#2c3e50",
+            bg="#f8f9fa",
+            justify=tk.LEFT
+        )
+        self.stats_label.pack(side=tk.LEFT)
 
         self.fig1, self.ax1 = plt.subplots(figsize=(6.5, 4.8))
         self.canvas1 = FigureCanvasTkAgg(self.fig1, self.charts_frame)
@@ -481,6 +494,31 @@ class SalesAnalyzerApp:
     def _update_ui_with_results(self, categories):
         try:
             self._draw_animation(categories)
+
+            if self.df_full is not None and not self.df_full.empty:
+                avg_qty = self.df_full['Количество продаж'].mean()
+                avg_price = self.df_full['Цена за шт'].mean()
+                total_rev = self.df_full['Количество продаж'].sum() * avg_price
+                total_rev_exact = (self.df_full['Количество продаж'] * self.df_full['Цена за шт']).sum()
+
+                if self.future_monthly is not None:
+                    forecast_2026 = self.future_monthly['прогноз_выручка'].sum()
+                elif self.future_by_cat:
+                    forecast_2026 = sum(arr.sum() for arr in self.future_by_cat.values())
+                else:
+                    forecast_2026 = 0
+
+                def fmt_int(x):
+                    return f"{int(round(x)):,}".replace(",", " ")
+
+                stats_text = (
+                    f"Средний спрос: {fmt_int(avg_qty)} шт.  •  "
+                    f"Средняя цена: {fmt_int(avg_price)} ₽  •  "
+                    f"Фактическая выручка: {fmt_int(total_rev_exact)} ₽  •  "
+                    f"Прогноз на 2026: {fmt_int(forecast_2026)} ₽"
+                )
+                self.stats_label.config(text=stats_text)
+
             self.export_btn.config(state="normal")
         except Exception as e:
             err_msg = str(e)
@@ -630,7 +668,7 @@ class SalesAnalyzerApp:
             self.anim_lines2 = [line]
         else:
             for i, cat in enumerate(categories):
-                color = revenue_colors[i % len(revenue_colors)]  # ← фиксированный цвет
+                color = revenue_colors[i % len(revenue_colors)]
                 if cat in self.future_by_cat and len(self.future_by_cat[cat]) >= 12:
                     y = self.future_by_cat[cat][:12]
                 else:
