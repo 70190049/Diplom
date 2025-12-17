@@ -111,7 +111,7 @@ class SalesAnalyzerApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Анализатор продаж")
-        self.root.geometry("1550x680")
+        self.root.geometry("1630x680")
         self.root.configure(bg="#f8f9fa")
         self.root.protocol("WM_DELETE_WINDOW", self._on_closing)
 
@@ -221,10 +221,10 @@ class SalesAnalyzerApp:
                 except:
                     pass
         try:
+            self.root.quit()
             self.root.destroy()
         except:
             pass
-        os._exit(0)
 
     def browse_file(self):
         path = filedialog.askopenfilename(filetypes=[("Excel", "*.xlsx *.xls")])
@@ -331,6 +331,8 @@ class SalesAnalyzerApp:
             X_categorical = df[categorical_cols].values
             X = np.hstack([X_numeric, X_categorical])
             y = df['Количество продаж'].values
+
+            model = None
 
             try:
                 model = NNBoost(n_estimators=50, learning_rate=0.03)
@@ -523,7 +525,6 @@ class SalesAnalyzerApp:
         n = len(df)
         x = np.arange(n)
         x_labels = df['месяц_str'].tolist() if 'месяц_str' in df.columns else [f"M{i + 1}" for i in range(n)]
-        colors = plt.cm.tab10.colors
         title = "все категории" if "Все категории" in categories else ", ".join(categories)
 
         ax1b = self.ax1.twinx()
@@ -538,8 +539,13 @@ class SalesAnalyzerApp:
             self.anim_lines1 = [line]
         else:
             bottom = np.zeros(n)
+            demand_colors = ['#3eb489', '#6db0cd', '#9ec0de', '#a3de9e', '#96afdb']
+            revenue_colors = ['#3e7cb4', '#2c6c7e', '#3e55b4', '#1a414c', '#0d2026']
+
             for i, cat in enumerate(categories):
-                color = colors[i % len(colors)]
+                color_demand = demand_colors[i % len(demand_colors)]
+                color_revenue = revenue_colors[i % len(revenue_colors)]
+
                 if cat in self.monthly_by_cat:
                     series = self.monthly_by_cat[cat]
                     qty = series['Количество продаж'].values
@@ -547,10 +553,14 @@ class SalesAnalyzerApp:
                 else:
                     qty = np.zeros(n)
                     rev = np.zeros(n)
-                bars = self.ax1.bar(x, qty, bottom=bottom, width=0.6, color=color, alpha=0.0,
+
+                bars = self.ax1.bar(x, qty, bottom=bottom, width=0.6,
+                                    color=color_demand, alpha=0.0,
                                     label=f'{cat}: факт')
-                line, = ax1b.plot(x, rev, '^-', color=color, linewidth=1.8, markersize=5,
+                line, = ax1b.plot(x, rev, '^-', color=color_revenue,
+                                  linewidth=1.8, markersize=5,
                                   alpha=0.0, label=f'{cat}: выручка')
+
                 self.anim_bars.append(bars)
                 self.anim_lines1.append(line)
                 bottom += qty
@@ -609,6 +619,8 @@ class SalesAnalyzerApp:
         month_labels = ["Янв", "Фев", "Мар", "Апр", "Май", "Июн", "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек"]
         self.anim_lines2 = []
 
+        revenue_colors = ['#3e7cb4', '#2c6c7e', '#3e55b4', '#1a414c', '#0d2026']
+
         if "Все категории" in categories or len(categories) == 1:
             y = self.future_monthly['прогноз_выручка'].values[:12].astype(float)
             if len(y) < 12:
@@ -618,7 +630,7 @@ class SalesAnalyzerApp:
             self.anim_lines2 = [line]
         else:
             for i, cat in enumerate(categories):
-                color = colors[i % len(colors)]
+                color = revenue_colors[i % len(revenue_colors)]  # ← фиксированный цвет
                 if cat in self.future_by_cat and len(self.future_by_cat[cat]) >= 12:
                     y = self.future_by_cat[cat][:12]
                 else:
@@ -637,13 +649,14 @@ class SalesAnalyzerApp:
         self.ax2.spines['right'].set_visible(False)
         self.ax2.set_ylim(bottom=0)
         self.ax2.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{int(x):,}'.replace(',', ' ')))
+        revenue_colors = ['#3e7cb4', '#2c6c7e', '#3e55b4', '#1a414c', '#0d2026']
         legend2_elements = []
         if "Все категории" in categories or len(categories) == 1:
             legend2_elements.append(Line2D([0], [0], color='#a6d75b', marker='s', linestyle='-',
                                            linewidth=2.5, markersize=7, label='2026 (суммарно)'))
         else:
             for i, cat in enumerate(categories):
-                color = colors[i % len(colors)]
+                color = revenue_colors[i % len(revenue_colors)]
                 legend2_elements.append(Line2D([0], [0], color=color, marker='o', linestyle='--',
                                                linewidth=2, markersize=5, label=cat))
 
