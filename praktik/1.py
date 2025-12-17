@@ -1,5 +1,4 @@
 import tkinter as tk
-import tkinter.ttk as ttk
 from tkinter import filedialog, messagebox
 import pandas as pd
 import numpy as np
@@ -16,7 +15,11 @@ from openpyxl.styles import Font, PatternFill, Alignment
 import re
 
 pd.set_option('future.no_silent_downcasting', True)
-plt.rcParams.update({'font.size': 9})
+plt.rcParams.update({
+    'font.size': 9,
+    'axes.formatter.useoffset': False,
+    'axes.formatter.limits': (-4, 4)
+})
 
 
 def sanitize_filename(filename):
@@ -372,7 +375,7 @@ class SalesAnalyzerApp:
                         self.future_by_cat[cat] = np.zeros(12)
                         continue
 
-                    cat_monthly = cat_df.groupby('месяц_period').agg({
+                    cat_monthly = cat_df.groupby('месяц_period', as_index=False).agg({
                         'Количество продаж': 'sum',
                         'оценка_выручка': 'sum'
                     })
@@ -444,7 +447,7 @@ class SalesAnalyzerApp:
                 try:
                     future_df['прогноз_спроса'] = model.predict(X_fut)
                 except:
-                    future_df['прогноз_спроса'] = future_df['Цена за шт']  # dummy
+                    future_df['прогноз_спроса'] = future_df['Цена за шт']
                 future_df['прогноз_выручка'] = future_df['Цена за шт'] * future_df['прогноз_спроса']
                 grouped = future_df.groupby(future_df.index // max(1, len(future_df)//12))
                 future_monthly = pd.DataFrame({
@@ -510,6 +513,13 @@ class SalesAnalyzerApp:
         self.ax2 = self.fig2.add_subplot(111)
 
         df = self.monthly_df
+        if df is None or df.empty:
+            self.ax1.text(0.5, 0.5, "Нет данных", ha='center', va='center', fontsize=14, color='gray')
+            self.ax2.text(0.5, 0.5, "Нет данных", ha='center', va='center', fontsize=14, color='gray')
+            self.canvas1.draw()
+            self.canvas2.draw()
+            return
+
         n = len(df)
         x = np.arange(n)
         x_labels = df['месяц_str'].tolist() if 'месяц_str' in df.columns else [f"M{i+1}" for i in range(n)]
@@ -550,7 +560,51 @@ class SalesAnalyzerApp:
         handles2, labels2 = ax1b.get_legend_handles_labels()
         self.ax1.legend(handles1 + handles2, labels1 + labels2, loc='upper left', fontsize=8, ncol=1 if len(labels1+labels2) < 8 else 2)
 
-        self.anim1 = FuncAnimation(self.fig1, lambda f: [], frames=1, repeat=False)
+        def animate1(frame):
+            frame = min(frame, n)
+            if isinstance(bars, list):
+                for i, bar_container in enumerate(bars):
+                    qty_vals = actual_qty_by_cat[i]
+                    for j, rect in enumerate(bar_container):
+                        h = qty_vals[j] if j < frame else 0.0
+                        rect.set_height(h)
+            else:
+                qty_vals = actual_qty
+                for j, rect in enumerate(bars):
+                    h = qty_vals[j] if j < frame else 0.0
+                    rect.set_height(h)
+
+            for i, line in enumerate(lines):
+                if "Все категории" in categories or len(categories) == 1:
+                    x_data = x[:frame]
+                    y_data = pred_rev[:frame]
+                else:
+                    x_data = x[:frame]
+                    y_data = pred_rev_by_cat[i][:frame]
+                line.set_data(x_data, y_data)
+
+            return tuple([rect for bar in ([bars] if not isinstance(bars, list) else bars) for rect in bar]) + tuple(lines)
+
+        if "Все категории" in categories or len(categories) == 1:
+            actual_qty = df['Количество продаж'].values
+            pred_rev = df['оценка_выручки'].values
+            lines = [line]
+        else:
+            actual_qty_by_cat = []
+            pred_rev_by_cat = []
+            for i, cat in enumerate(categories):
+                if cat in self.monthly_by_cat:
+                    series = self.monthly_by_cat[cat]
+                    qty = series['Количество продаж'].values
+                    rev = series['оценка_выручка'].values
+                    actual_qty_by_cat.append(qty)
+                    pred_rev_by_cat.append(rev)
+                else:
+                    actual_qty_by_cat.append(np.zeros(n))
+                    pred_rev_by_cat.append(np.zeros(n))
+            lines = []
+
+        self.anim1 = FuncAnimation(self.fig1, animate1, frames=n + 1, interval=100, blit=False, repeat=False)
         self.canvas1.draw()
 
         x_vals = np.arange(12)
@@ -584,7 +638,30 @@ class SalesAnalyzerApp:
         self.ax2.spines['right'].set_visible(False)
         self.ax2.set_ylim(bottom=0)
 
-        self.anim2 = FuncAnimation(self.fig2, lambda f: [], frames=1, repeat=False)
+        def animate2(frame):
+            frame = min(frame, 12)
+            for i, line in enumerate(lines2):
+                x_data = x_vals[:frame]
+                y_data = future_by_cat[cat][:frame] if cat in self.future_by_cat else np.zeros(frame)
+                line.set_data(x_data, y_data)
+            return lines2
+
+        lines2 = []
+        if "Все категории" in categories or len(categories) == 1:
+            y = self.future_monthly['прогноз_выручка'].values[:12].astype(float)
+            if len(y) < 12:
+                y = np.pad(y, (0, 12 - len(y)), constant_values=(y[-1] if len(y) > 0 else 50000))
+            line2, = self.ax2.plot([], [], 's-', color='#a6d75b', linewidth=2.5, markersize=7, label='2026 (суммарно)')
+            lines2 = [line2]
+        else:
+            for i, cat in enumerate(categories):
+                color = colors[i % len(colors)]
+                if cat in self.future_by_cat and len(self.future_by_cat[cat]) >= 12:
+                    y = self.future_by_cat[cat][:12]
+                    line2, = self.ax2.plot([], [], 'o--', color=color, linewidth=2, markersize=5, label=cat)
+                    lines2.append(line2)
+
+        self.anim2 = FuncAnimation(self.fig2, animate2, frames=13, interval=100, blit=False, repeat=False)
         self.canvas2.draw()
 
     def export_to_excel(self):
