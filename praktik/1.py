@@ -366,6 +366,11 @@ class SalesAnalyzerApp:
                 df['прогноз_спроса'] = df['Количество продаж']
                 df['оценка_выручки'] = df['Количество продаж'] * df['Цена за шт']
 
+            if 'оценка_выручка' not in df.columns:
+                df['оценка_выручка'] = df['Цена за шт'] * df['Количество продаж']
+            if 'прогноз_спроса' not in df.columns:
+                df['прогноз_спроса'] = df['Количество продаж']
+
             self.df_full = df.copy()
 
             df['месяц_period'] = df['Дата'].dt.to_period('M')
@@ -519,13 +524,40 @@ class SalesAnalyzerApp:
                 def fmt_int(x):
                     return f"{int(round(x)):,}".replace(",", " ")
 
-                stats_text = (
-                    f"Средний спрос: {fmt_int(avg_qty)} шт.  •  "
-                    f"Средняя цена: {fmt_int(avg_price)} ₽  •  "
-                    f"Фактическая выручка: {fmt_int(total_rev_exact)} ₽  •  "
-                    f"Прогноз на 2026: {fmt_int(forecast_2026)} ₽"
-                )
-                self.stats_label.config(text=stats_text)
+                if self.df_full is not None and not self.df_full.empty:
+                    avg_qty = self.df_full['Количество продаж'].mean()
+                    avg_price = self.df_full['Цена за шт'].mean()
+                    total_rev_exact = (self.df_full['Количество продаж'] * self.df_full['Цена за шт']).sum()
+
+                    if self.future_monthly is not None:
+                        forecast_2026 = self.future_monthly['прогноз_выручка'].sum()
+                    elif self.future_by_cat:
+                        forecast_2026 = sum(arr.sum() for arr in self.future_by_cat.values())
+                    else:
+                        forecast_2026 = 0
+
+                    metrics, years_info = self._calculate_yearly_comparison(self.df_full)
+
+                    def fmt_int(x):
+                        return f"{int(round(x)):,}".replace(",", " ")
+
+                    def fmt_pct(change):
+                        if abs(change) < 0.1:
+                            return "≈0%"
+                        arrow = "▲" if change > 0 else "▼" if change < 0 else "→"
+                        return f"{arrow}{abs(change):.0f}%"
+
+                    qty_str = f"{fmt_int(avg_qty)} шт. ({fmt_pct(metrics.get('qty_change', 0))})"
+                    price_str = f"{fmt_int(avg_price)} ₽ ({fmt_pct(metrics.get('price_change', 0))})"
+                    rev_str = f"{fmt_int(total_rev_exact)} ₽ ({fmt_pct(metrics.get('rev_change', 0))})"
+
+                    stats_text = (
+                        f"Средний спрос: {qty_str}  •  "
+                        f"Средняя цена: {price_str}  •  "
+                        f"Фактическая выручка: {rev_str}  •  "
+                        f"Прогноз на 2026: {fmt_int(forecast_2026)} ₽"
+                    )
+                    self.stats_label.config(text=stats_text)
 
             self.export_btn.config(state="normal")
             self.export_plot_btn.config(state="normal")
@@ -546,6 +578,50 @@ class SalesAnalyzerApp:
             self.browse_btn.config(state="normal")
             self.apply_cat_btn.config(state="normal")
             self.cat_listbox.config(state="normal")
+
+    def _calculate_yearly_comparison(self, df):
+        if df.empty or 'Дата' not in df.columns:
+            return {}, {}
+
+        df['год'] = df['Дата'].dt.year
+        years = sorted(df['год'].unique())
+        if len(years) < 2:
+            return {}, {}
+
+        current_year = years[-1]
+        prev_year = years[-2]
+
+        yearly = df.groupby('год').agg(
+            total_qty=('Количество продаж', 'sum'),
+            avg_price=('Цена за шт', 'mean'),
+            total_rev=('оценка_выручка', 'sum')
+        ).round(2)
+
+        curr = yearly.loc[current_year]
+        prev = yearly.loc[prev_year]
+
+        def pct_change(curr, prev):
+            if prev == 0:
+                return 0
+            return (curr - prev) / prev * 100
+
+        metrics = {
+            'avg_qty': df[df['год'] == current_year]['Количество продаж'].mean(),
+            'avg_qty_prev': df[df['год'] == prev_year]['Количество продаж'].mean(),
+            'avg_price': curr['avg_price'],
+            'avg_price_prev': prev['avg_price'],
+            'total_rev': curr['total_rev'],
+            'total_rev_prev': prev['total_rev']
+        }
+
+        metrics['qty_change'] = pct_change(metrics['avg_qty'], metrics['avg_qty_prev'])
+        metrics['price_change'] = pct_change(metrics['avg_price'], metrics['avg_price_prev'])
+        metrics['rev_change'] = pct_change(metrics['total_rev'], metrics['total_rev_prev'])
+
+        return metrics, {
+            'current_year': current_year,
+            'prev_year': prev_year
+        }
 
     def _draw_animation(self, categories):
         for anim in [self.anim1, self.anim2]:
