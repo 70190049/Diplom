@@ -158,6 +158,14 @@ class SalesAnalyzerApp:
         self.export_btn.pack(side=tk.LEFT, padx=5)
         self.export_btn.config(state="disabled")
 
+        self.export_plot_btn = tk.Button(
+            center_container, text="Сохранить графики",
+            command=self.export_plots,
+            bg="#21837a", fg="white", font=("Arial", 10, "bold"), padx=10
+        )
+        self.export_plot_btn.pack(side=tk.LEFT, padx=5)
+        self.export_plot_btn.config(state="disabled")
+
         cat_frame = tk.Frame(control_frame, bg="#f8f9fa", pady=5)
         cat_frame.pack(expand=True)
 
@@ -520,6 +528,7 @@ class SalesAnalyzerApp:
                 self.stats_label.config(text=stats_text)
 
             self.export_btn.config(state="normal")
+            self.export_plot_btn.config(state="normal")
         except Exception as e:
             err_msg = str(e)
             self.root.after(0, lambda msg=err_msg: messagebox.showerror("Ошибка визуализации", msg))
@@ -551,6 +560,8 @@ class SalesAnalyzerApp:
         self.fig2.clear()
         self.ax1 = self.fig1.add_subplot(111)
         self.ax2 = self.fig2.add_subplot(111)
+        self.canvas1.figure = self.fig1
+        self.canvas2.figure = self.fig2
 
         df = self.monthly_df
         if df is None or df.empty:
@@ -856,6 +867,34 @@ class SalesAnalyzerApp:
         except Exception as e:
             err_msg = str(e)
             self.root.after(0, lambda msg=err_msg: messagebox.showerror("Ошибка экспорта", msg))
+
+    def export_plots(self):
+        try:
+            self.canvas1.figure = self.fig1
+            self.canvas2.figure = self.fig2
+
+            cat_name = "графики"
+            if "Все категории" not in self.selected_categories:
+                cat_name = "_".join(self.selected_categories[:2])
+            path = filedialog.asksaveasfilename(
+                initialfile=f"Графики_{sanitize_filename(cat_name)}",
+                defaultextension=".png",
+                filetypes=[("PNG", "*.png"), ("PDF", "*.pdf")],
+                title="Сохранить графики"
+            )
+            if not path:
+                return
+
+            base = os.path.splitext(path)[0]
+            path1 = f"{base}_факт.png"
+            path2 = f"{base}_прогноз.png"
+
+            self.fig1.savefig(path1, dpi=150, bbox_inches='tight')
+            self.fig2.savefig(path2, dpi=150, bbox_inches='tight')
+
+            messagebox.showinfo("Готово", f"Сохранено:\n{os.path.basename(path1)}\n{os.path.basename(path2)}")
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Не удалось сохранить графики:\n{e}")
 
 
 if __name__ == "__main__":
