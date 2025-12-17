@@ -365,7 +365,6 @@ class SalesAnalyzerApp:
                         cat_df['прогноз_спроса'] = cat_df['Количество продаж']
                     if 'оценка_выручка' not in cat_df.columns:
                         cat_df['оценка_выручка'] = cat_df['Количество продаж'] * cat_df['Цена за шт']
-
                     if cat_df.empty:
                         self.monthly_by_cat[cat] = pd.DataFrame({
                             'месяц_period': monthly['месяц_period'],
@@ -374,8 +373,7 @@ class SalesAnalyzerApp:
                         }).set_index('месяц_period')
                         self.future_by_cat[cat] = np.zeros(12)
                         continue
-
-                    cat_monthly = cat_df.groupby('месяц_period', as_index=False).agg({
+                    cat_monthly = cat_df.groupby('месяц_period').agg({
                         'Количество продаж': 'sum',
                         'оценка_выручка': 'sum'
                     })
@@ -558,7 +556,8 @@ class SalesAnalyzerApp:
 
         handles1, labels1 = self.ax1.get_legend_handles_labels()
         handles2, labels2 = ax1b.get_legend_handles_labels()
-        self.ax1.legend(handles1 + handles2, labels1 + labels2, loc='upper left', fontsize=8, ncol=1 if len(labels1+labels2) < 8 else 2)
+        self.ax1.legend(handles1 + handles2, labels1 + labels2, loc='upper left', fontsize=8,
+                        ncol=1 if len(labels1 + labels2) < 8 else 2)
 
         def animate1(frame):
             frame = min(frame, n)
