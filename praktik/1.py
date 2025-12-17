@@ -560,50 +560,26 @@ class SalesAnalyzerApp:
                         ncol=1 if len(labels1 + labels2) < 8 else 2)
 
         def animate1(frame):
-            frame = min(frame, n)
-            if isinstance(bars, list):
-                for i, bar_container in enumerate(bars):
-                    qty_vals = actual_qty_by_cat[i]
-                    for j, rect in enumerate(bar_container):
-                        h = qty_vals[j] if j < frame else 0.0
-                        rect.set_height(h)
+            if "Все категории" in categories or len(categories) == 1:
+                for rect in bars:
+                    full_h = rect.get_height()
+                    rect.set_height(full_h * min(frame / 10, 1))
             else:
-                qty_vals = actual_qty
-                for j, rect in enumerate(bars):
-                    h = qty_vals[j] if j < frame else 0.0
-                    rect.set_height(h)
+                ax_bars = [c for c in self.ax1.containers if hasattr(c, 'get_children')]
+                for bar_container in ax_bars:
+                    for rect in bar_container:
+                        full_h = rect.get_height()
+                        rect.set_height(full_h * min(frame / 10, 1))
+            ax1b_lines = ax1b.get_lines()
+            for line in ax1b_lines:
+                xdata = line.get_xdata()
+                ydata = line.get_ydata()
+                n = len(xdata)
+                k = min(frame, n)
+                line.set_data(xdata[:k], ydata[:k])
+            return []
 
-            for i, line in enumerate(lines):
-                if "Все категории" in categories or len(categories) == 1:
-                    x_data = x[:frame]
-                    y_data = pred_rev[:frame]
-                else:
-                    x_data = x[:frame]
-                    y_data = pred_rev_by_cat[i][:frame]
-                line.set_data(x_data, y_data)
-
-            return tuple([rect for bar in ([bars] if not isinstance(bars, list) else bars) for rect in bar]) + tuple(lines)
-
-        if "Все категории" in categories or len(categories) == 1:
-            actual_qty = df['Количество продаж'].values
-            pred_rev = df['оценка_выручки'].values
-            lines = [line]
-        else:
-            actual_qty_by_cat = []
-            pred_rev_by_cat = []
-            for i, cat in enumerate(categories):
-                if cat in self.monthly_by_cat:
-                    series = self.monthly_by_cat[cat]
-                    qty = series['Количество продаж'].values
-                    rev = series['оценка_выручка'].values
-                    actual_qty_by_cat.append(qty)
-                    pred_rev_by_cat.append(rev)
-                else:
-                    actual_qty_by_cat.append(np.zeros(n))
-                    pred_rev_by_cat.append(np.zeros(n))
-            lines = []
-
-        self.anim1 = FuncAnimation(self.fig1, animate1, frames=n + 1, interval=100, blit=False, repeat=False)
+        self.anim1 = FuncAnimation(self.fig1, animate1, frames=11, interval=80, blit=False, repeat=False)
         self.canvas1.draw()
 
         x_vals = np.arange(12)
@@ -638,27 +614,14 @@ class SalesAnalyzerApp:
         self.ax2.set_ylim(bottom=0)
 
         def animate2(frame):
-            frame = min(frame, 12)
-            for i, line in enumerate(lines2):
-                x_data = x_vals[:frame]
-                y_data = future_by_cat[cat][:frame] if cat in self.future_by_cat else np.zeros(frame)
-                line.set_data(x_data, y_data)
-            return lines2
-
-        lines2 = []
-        if "Все категории" in categories or len(categories) == 1:
-            y = self.future_monthly['прогноз_выручка'].values[:12].astype(float)
-            if len(y) < 12:
-                y = np.pad(y, (0, 12 - len(y)), constant_values=(y[-1] if len(y) > 0 else 50000))
-            line2, = self.ax2.plot([], [], 's-', color='#a6d75b', linewidth=2.5, markersize=7, label='2026 (суммарно)')
-            lines2 = [line2]
-        else:
-            for i, cat in enumerate(categories):
-                color = colors[i % len(colors)]
-                if cat in self.future_by_cat and len(self.future_by_cat[cat]) >= 12:
-                    y = self.future_by_cat[cat][:12]
-                    line2, = self.ax2.plot([], [], 'o--', color=color, linewidth=2, markersize=5, label=cat)
-                    lines2.append(line2)
+            lines = self.ax2.get_lines()
+            for line in lines:
+                xdata = line.get_xdata()
+                ydata = line.get_ydata()
+                n = len(xdata)
+                k = min(frame, n)
+                line.set_data(xdata[:k], ydata[:k])
+            return []
 
         self.anim2 = FuncAnimation(self.fig2, animate2, frames=13, interval=100, blit=False, repeat=False)
         self.canvas2.draw()
