@@ -115,10 +115,10 @@ class SalesAnalyzerApp:
         self.root.configure(bg="#f8f9fa")
         self.root.protocol("WM_DELETE_WINDOW", self._on_closing)
 
-        top_frame = tk.Frame(root, bg="#f8f9fa", pady=5)
-        top_frame.pack(fill=tk.X)
+        self.top_frame = tk.Frame(root, bg="#f8f9fa", pady=5)
+        self.top_frame.pack(fill=tk.X)
         self.status_label = tk.Label(
-            top_frame,
+            self.top_frame,
             text="Прогноз на 2026 год (12 мес.)",
             font=("Arial", 14, "bold"),
             fg="#1a5276",
@@ -126,32 +126,44 @@ class SalesAnalyzerApp:
         )
         self.status_label.pack(side=tk.LEFT, padx=20)
 
-        control_frame = tk.Frame(root, bg="#f8f9fa", pady=5)
-        control_frame.pack(fill=tk.X)
+        self.theme_btn = tk.Button(
+            self.top_frame,
+            text="Тёмная тема",
+            command=self.toggle_theme,
+            bg="#7f8c8d",
+            fg="white",
+            width=10,
+            font=("Arial", 12)
+        )
+        self.theme_btn.pack(side=tk.RIGHT, padx=10)
+        self.dark_theme = False
 
-        center_container = tk.Frame(control_frame, bg="#f8f9fa")
-        center_container.pack(expand=True)
+        self.control_frame = tk.Frame(root, bg="#f8f9fa", pady=5)
+        self.control_frame.pack(fill=tk.X)
 
-        tk.Label(center_container, text="Файл:", font=("Arial", 11), bg="#f8f9fa").pack(side=tk.LEFT, padx=5)
-        self.path_entry = tk.Entry(center_container, width=65, font=("Consolas", 10))
+        self.center_container = tk.Frame(self.control_frame, bg="#f8f9fa")
+        self.center_container.pack(expand=True)
+
+        tk.Label(self.center_container, text="Файл:", font=("Arial", 11), bg="#f8f9fa").pack(side=tk.LEFT, padx=5)
+        self.path_entry = tk.Entry(self.center_container, width=65, font=("Consolas", 10))
         self.path_entry.pack(side=tk.LEFT, padx=5)
         self.path_entry.insert(0, "")
 
         self.browse_btn = tk.Button(
-            center_container, text="Выбрать", command=self.browse_file,
+            self.center_container, text="Выбрать", command=self.browse_file,
             bg="#3498db", fg="white", padx=10
         )
         self.browse_btn.pack(side=tk.LEFT, padx=5)
 
         self.load_btn = tk.Button(
-            center_container, text="Запустить анализ",
+            self.center_container, text="Запустить анализ",
             command=self.start_analysis,
             bg="#27ae60", fg="white", font=("Arial", 10, "bold"), padx=15
         )
         self.load_btn.pack(side=tk.LEFT, padx=5)
 
         self.export_btn = tk.Button(
-            center_container, text="Сохранить в Excel",
+            self.center_container, text="Сохранить в Excel",
             command=self.export_to_excel,
             bg="#218359", fg="white", font=("Arial", 10, "bold"), padx=10
         )
@@ -159,14 +171,14 @@ class SalesAnalyzerApp:
         self.export_btn.config(state="disabled")
 
         self.export_plot_btn = tk.Button(
-            center_container, text="Сохранить графики",
+            self.center_container, text="Сохранить графики",
             command=self.export_plots,
             bg="#21837a", fg="white", font=("Arial", 10, "bold"), padx=10
         )
         self.export_plot_btn.pack(side=tk.LEFT, padx=5)
         self.export_plot_btn.config(state="disabled")
 
-        cat_frame = tk.Frame(control_frame, bg="#f8f9fa", pady=5)
+        cat_frame = tk.Frame(self.control_frame, bg="#f8f9fa", pady=5)
         cat_frame.pack(expand=True)
 
         tk.Label(cat_frame, text="Категории:", font=("Arial", 11), bg="#f8f9fa").pack(side=tk.LEFT, padx=5)
@@ -233,6 +245,96 @@ class SalesAnalyzerApp:
 
         self.charts_frame.grid_columnconfigure(0, weight=1)
         self.charts_frame.grid_columnconfigure(1, weight=1)
+
+    def toggle_theme(self):
+        self.dark_theme = not self.dark_theme
+
+        if self.dark_theme:
+            bg_color = "#2d2d2d"
+            fg_color = "white"
+            stats_fg = "white"
+            canvas_bg = "#1e1e1e"
+            legend_bg = "#3a3f4b"
+            legend_edge = "#555"
+        else:
+            bg_color = "#f8f9fa"
+            fg_color = "#2c3e50"
+            stats_fg = "#2c3e50"
+            canvas_bg = "white"
+            legend_bg = "white"
+            legend_edge = "lightgray"
+
+        self.root.config(bg=bg_color)
+        self.top_frame.config(bg=bg_color)
+        self.control_frame.config(bg=bg_color)
+        self.center_container.config(bg=bg_color)
+        self.stats_frame.config(bg=bg_color)
+        self.charts_frame.config(bg=bg_color)
+
+        cat_frame = next(
+            (w for w in self.control_frame.winfo_children() if isinstance(w, tk.Frame) and w != self.center_container),
+            None
+        )
+        if cat_frame:
+            cat_frame.config(bg=bg_color)
+
+        for widget in self.top_frame.winfo_children() + self.center_container.winfo_children():
+            if isinstance(widget, tk.Label):
+                widget.config(bg=bg_color, fg=fg_color)
+        if cat_frame:
+            for widget in cat_frame.winfo_children():
+                if isinstance(widget, tk.Label):
+                    widget.config(bg=bg_color, fg=fg_color)
+
+        for ax in [self.ax1, self.ax2]:
+            legend = ax.get_legend()
+            if legend:
+                frame = legend.get_frame()
+                frame.set_facecolor(legend_bg)
+                frame.set_edgecolor(legend_edge)
+                frame.set_alpha(0.9)
+
+                for text in legend.get_texts():
+                    text.set_color(fg_color)
+
+        if hasattr(self, 'fig1') and self.fig1:
+            self.fig1.patch.set_facecolor(canvas_bg)
+            self.ax1.set_facecolor(canvas_bg)
+            self.ax1.spines['bottom'].set_color(fg_color)
+            self.ax1.spines['left'].set_color(fg_color)
+            self.ax1.tick_params(colors=fg_color)
+            self.ax1.xaxis.label.set_color(fg_color)
+            self.ax1.yaxis.label.set_color(fg_color)
+            self.ax1.title.set_color(fg_color)
+            for text in self.ax1.get_legend().get_texts() if self.ax1.get_legend() else []:
+                text.set_color(fg_color)
+
+        if hasattr(self, 'fig2') and self.fig2:
+            self.fig2.patch.set_facecolor(canvas_bg)
+            self.ax2.set_facecolor(canvas_bg)
+            self.ax2.spines['bottom'].set_color(fg_color)
+            self.ax2.spines['left'].set_color(fg_color)
+            self.ax2.tick_params(colors=fg_color)
+            self.ax2.xaxis.label.set_color(fg_color)
+            self.ax2.yaxis.label.set_color(fg_color)
+            self.ax2.title.set_color(fg_color)
+            for text in self.ax2.get_legend().get_texts() if self.ax2.get_legend() else []:
+                text.set_color(fg_color)
+
+        if hasattr(self, 'ax1b') and self.ax1b:
+            revenue_color = "white" if self.dark_theme else "black"
+            self.ax1b.yaxis.label.set_color(revenue_color)
+            self.ax1b.tick_params(axis='y', colors=revenue_color)
+            for spine in self.ax1b.spines.values():
+                spine.set_color(revenue_color)
+            self.canvas1.draw_idle()
+
+        self.stats_label.config(bg=bg_color, fg=stats_fg)
+
+        if hasattr(self, 'canvas1'):
+            self.canvas1.draw()
+        if hasattr(self, 'canvas2'):
+            self.canvas2.draw()
 
     def _on_closing(self):
         for anim in [self.anim1, self.anim2]:
@@ -636,8 +738,44 @@ class SalesAnalyzerApp:
         self.fig2.clear()
         self.ax1 = self.fig1.add_subplot(111)
         self.ax2 = self.fig2.add_subplot(111)
+
+        self.ax1b = self.ax1.twinx()
+        revenue_color = "white" if self.dark_theme else "black"
+        self.ax1b.yaxis.label.set_color(revenue_color)
+        self.ax1b.tick_params(axis='y', colors=revenue_color)
+        for spine in self.ax1b.spines.values():
+            spine.set_color(revenue_color)
+        self.anim_bars = []
+        self.anim_lines1 = []
+
         self.canvas1.figure = self.fig1
         self.canvas2.figure = self.fig2
+
+        if self.dark_theme:
+            canvas_bg = "#1e1e1e"
+            text_color = "white"
+            legend_bg = "#3a3f4b"
+            legend_edge = "#555"
+            legend_text = "white"
+        else:
+            canvas_bg = "white"
+            text_color = "#2c3e50"
+            legend_bg = "white"
+            legend_edge = "lightgray"
+            legend_text = "#2c3e50"
+
+        self.fig1.patch.set_facecolor(canvas_bg)
+        self.ax1.set_facecolor(canvas_bg)
+        self.fig2.patch.set_facecolor(canvas_bg)
+        self.ax2.set_facecolor(canvas_bg)
+
+        for ax in [self.ax1, self.ax1b, self.ax2]:
+            ax.tick_params(colors=text_color)
+            ax.xaxis.label.set_color(text_color)
+            ax.yaxis.label.set_color(text_color)
+            ax.title.set_color(text_color)
+            for spine in ax.spines.values():
+                spine.set_color(text_color)
 
         df = self.monthly_df
         if df is None or df.empty:
@@ -652,20 +790,16 @@ class SalesAnalyzerApp:
         x_labels = df['месяц_str'].tolist() if 'месяц_str' in df.columns else [f"M{i + 1}" for i in range(n)]
         title = "все категории" if "Все категории" in categories else ", ".join(categories)
 
-        ax1b = self.ax1.twinx()
-        self.anim_bars = []
-        self.anim_lines1 = []
-
         if "Все категории" in categories or len(categories) == 1:
             bars = self.ax1.bar(x, df['Количество продаж'], width=0.6, color='#76c68f', alpha=0.0, label='Факт: спрос')
-            line, = ax1b.plot(x, df['оценка_выручка'], 'o-', color='#22a7f0', linewidth=2.2, markersize=6,
+            line, = self.ax1b.plot(x, df['оценка_выручка'], 'o-', color='#22a7f0', linewidth=2.2, markersize=6,
                               alpha=0.0, label='Оценка: выручка')
             self.anim_bars = [bars]
             self.anim_lines1 = [line]
         else:
             bottom = np.zeros(n)
             demand_colors = ['#3eb489', '#6db0cd', '#9ec0de', '#a3de9e', '#96afdb']
-            revenue_colors = ['#3e7cb4', '#2c6c7e', '#3e55b4', '#1a414c', '#0d2026']
+            revenue_colors = ['#3e7cb4', '#2c6c7e', '#3e55b4', '#1a414c', '#11442e']
 
             for i, cat in enumerate(categories):
                 color_demand = demand_colors[i % len(demand_colors)]
@@ -682,7 +816,7 @@ class SalesAnalyzerApp:
                 bars = self.ax1.bar(x, qty, bottom=bottom, width=0.6,
                                     color=color_demand, alpha=0.0,
                                     label=f'{cat}: факт')
-                line, = ax1b.plot(x, rev, '^-', color=color_revenue,
+                line, = self.ax1b.plot(x, rev, '^-', color=color_revenue,
                                   linewidth=1.8, markersize=5,
                                   alpha=0.0, label=f'{cat}: выручка')
 
@@ -691,21 +825,21 @@ class SalesAnalyzerApp:
                 bottom += qty
 
         self.ax1.set_ylabel('Спрос, шт', fontsize=10)
-        ax1b.set_ylabel('Выручка, ₽', fontsize=10)
+        self.ax1b.set_ylabel('Выручка, ₽', fontsize=10)
         self.ax1.set_xlabel('Месяц', fontsize=10)
         self.ax1.set_title(f'Факт и прогноз спроса\n({title})', fontweight='bold', fontsize=11)
         self.ax1.set_xticks(x)
         self.ax1.set_xticklabels(x_labels, rotation=45, ha='right', fontsize=8)
         self.ax1.grid(True, linestyle='--', alpha=0.5, linewidth=0.7)
         self.ax1.spines['top'].set_visible(False)
-        ax1b.spines['top'].set_visible(False)
+        self.ax1b.spines['top'].set_visible(False)
         self.ax1.set_ylim(bottom=0)
-        ax1b.set_ylim(bottom=0)
+        self.ax1b.set_ylim(bottom=0)
         self.ax1.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{int(x):,}'.replace(',', ' ')))
-        ax1b.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{int(x):,}'.replace(',', ' ')))
+        self.ax1b.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{int(x):,}'.replace(',', ' ')))
 
         handles1, labels1 = self.ax1.get_legend_handles_labels()
-        handles2, labels2 = ax1b.get_legend_handles_labels()
+        handles2, labels2 = self.ax1b.get_legend_handles_labels()
         legend_elements = []
 
         if "Все категории" in categories or len(categories) == 1:
@@ -713,7 +847,7 @@ class SalesAnalyzerApp:
             rect = bars[0]
             fc = rect.get_facecolor()
             legend_elements.append(Patch(facecolor=fc, alpha=0.8, label='Факт: спрос'))
-            line = ax1b.get_lines()[0]
+            line = self.ax1b.get_lines()[0]
             color = line.get_color()
             legend_elements.append(Line2D([0], [0], color=color, marker='o', linestyle='-',
                                           linewidth=2.2, markersize=6, label='Оценка: выручка'))
@@ -724,8 +858,8 @@ class SalesAnalyzerApp:
                     rect = bars[0]
                     fc = rect.get_facecolor()
                     legend_elements.append(Patch(facecolor=fc, alpha=0.7, label=f'{cat}: факт'))
-                if i < len(ax1b.get_lines()):
-                    line = ax1b.get_lines()[i]
+                if i < len(self.ax1b.get_lines()):
+                    line = self.ax1b.get_lines()[i]
                     color = line.get_color()
                     legend_elements.append(Line2D([0], [0], color=color, marker='^', linestyle='-',
                                                   linewidth=1.8, markersize=5, label=f'{cat}: выручка'))
@@ -735,8 +869,11 @@ class SalesAnalyzerApp:
                                  fontsize=8,
                                  ncol=1 if len(legend_elements) < 8 else 2,
                                  frameon=True)
+        legend.get_frame().set_facecolor(legend_bg)
+        legend.get_frame().set_edgecolor(legend_edge)
         legend.get_frame().set_alpha(0.9)
-        legend.get_frame().set_edgecolor('gray')
+        for text in legend.get_texts():
+            text.set_color(legend_text)
         for artist in legend.get_children():
             artist.set_animated(False)
 
@@ -744,7 +881,7 @@ class SalesAnalyzerApp:
         month_labels = ["Янв", "Фев", "Мар", "Апр", "Май", "Июн", "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек"]
         self.anim_lines2 = []
 
-        revenue_colors = ['#3e7cb4', '#2c6c7e', '#3e55b4', '#1a414c', '#0d2026']
+        revenue_colors = ['#3e7cb4', '#2c6c7e', '#3e55b4', '#1a414c', '#11442e']
 
         if "Все категории" in categories or len(categories) == 1:
             y = self.future_monthly['прогноз_выручка'].values[:12].astype(float)
@@ -774,7 +911,7 @@ class SalesAnalyzerApp:
         self.ax2.spines['right'].set_visible(False)
         self.ax2.set_ylim(bottom=0)
         self.ax2.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{int(x):,}'.replace(',', ' ')))
-        revenue_colors = ['#3e7cb4', '#2c6c7e', '#3e55b4', '#1a414c', '#0d2026']
+        revenue_colors = ['#3e7cb4', '#2c6c7e', '#3e55b4', '#1a414c', '#11442e']
         legend2_elements = []
         if "Все категории" in categories or len(categories) == 1:
             legend2_elements.append(Line2D([0], [0], color='#a6d75b', marker='s', linestyle='-',
@@ -790,8 +927,11 @@ class SalesAnalyzerApp:
                                   fontsize=8,
                                   ncol=1 if len(legend2_elements) < 5 else 2,
                                   frameon=True)
+        legend2.get_frame().set_facecolor(legend_bg)
+        legend2.get_frame().set_edgecolor(legend_edge)
         legend2.get_frame().set_alpha(0.9)
-        legend2.get_frame().set_edgecolor('gray')
+        for text in legend2.get_texts():
+            text.set_color(legend_text)
         for artist in legend2.get_children():
             artist.set_animated(False)
 
