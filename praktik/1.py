@@ -1159,11 +1159,19 @@ class SalesAnalyzerApp:
         self.ax3.grid(True, axis='y', linestyle='--', alpha=0.5)
         self.ax3.set_ylim(0, max(2.5, max_height * 1.1))
 
+        legend_elements = []
+        legend_elements.append(Patch(facecolor='lightgray', alpha=0.7, edgecolor='gray', label='Все категории'))
+
+        for idx, cat in enumerate(top_categories):
+            color = colors[idx % len(colors)]
+            legend_elements.append(Patch(facecolor=color, alpha=0.9, label=cat))
+
         legend = self.ax3.legend(
+            handles=legend_elements,
             loc='upper left',
             bbox_to_anchor=(0.0, -0.27),
             fontsize=8,
-            ncol=1 if len(top_categories) + 1 < 5 else 2,
+            ncol=1 if len(legend_elements) < 5 else 2,
             frameon=True
         )
         legend.get_frame().set_alpha(0.9)
