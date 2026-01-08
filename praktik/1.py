@@ -609,11 +609,12 @@ class SalesAnalyzerApp:
     def _update_ui_with_results(self, categories):
         try:
             self._draw_animation(categories)
-
             if self.df_full is not None and not self.df_full.empty:
+                seasonal_coeffs, seasonality_text = self._calculate_seasonality(self.df_full)
+                self.seasonal_coeffs = seasonal_coeffs
+
                 avg_qty = self.df_full['Количество продаж'].mean()
                 avg_price = self.df_full['Цена за шт'].mean()
-                total_rev = self.df_full['Количество продаж'].sum() * avg_price
                 total_rev_exact = (self.df_full['Количество продаж'] * self.df_full['Цена за шт']).sum()
 
                 if self.future_monthly is not None:
@@ -623,46 +624,35 @@ class SalesAnalyzerApp:
                 else:
                     forecast_2026 = 0
 
+                metrics, years_info = self._calculate_yearly_comparison(self.df_full)
+
                 def fmt_int(x):
                     return f"{int(round(x)):,}".replace(",", " ")
 
-                if self.df_full is not None and not self.df_full.empty:
-                    avg_qty = self.df_full['Количество продаж'].mean()
-                    avg_price = self.df_full['Цена за шт'].mean()
-                    total_rev_exact = (self.df_full['Количество продаж'] * self.df_full['Цена за шт']).sum()
+                def fmt_pct(change):
+                    if abs(change) < 0.1:
+                        return "≈0%"
+                    arrow = "▲" if change > 0 else "▼"
+                    return f"{arrow}{abs(change):.0f}%"
 
-                    if self.future_monthly is not None:
-                        forecast_2026 = self.future_monthly['прогноз_выручка'].sum()
-                    elif self.future_by_cat:
-                        forecast_2026 = sum(arr.sum() for arr in self.future_by_cat.values())
-                    else:
-                        forecast_2026 = 0
+                qty_str = f"{fmt_int(avg_qty)} шт. ({fmt_pct(metrics.get('qty_change', 0))})"
+                price_str = f"{fmt_int(avg_price)} ₽ ({fmt_pct(metrics.get('price_change', 0))})"
+                rev_str = f"{fmt_int(total_rev_exact)} ₽ ({fmt_pct(metrics.get('rev_change', 0))})"
 
-                    metrics, years_info = self._calculate_yearly_comparison(self.df_full)
+                stats_parts = [
+                    f"Средний спрос: {qty_str}",
+                    f"Средняя цена: {price_str}",
+                    f"Фактич. выручка: {rev_str}",
+                    f"Прогноз 2026: {fmt_int(forecast_2026)} ₽"
+                ]
+                if seasonality_text:
+                    stats_parts.append(f"Сезонность: {seasonality_text}")
 
-                    def fmt_int(x):
-                        return f"{int(round(x)):,}".replace(",", " ")
+                stats_text = "  •  ".join(stats_parts)
+                self.stats_label.config(text=stats_text)
 
-                    def fmt_pct(change):
-                        if abs(change) < 0.1:
-                            return "≈0%"
-                        arrow = "▲" if change > 0 else "▼" if change < 0 else "→"
-                        return f"{arrow}{abs(change):.0f}%"
-
-                    qty_str = f"{fmt_int(avg_qty)} шт. ({fmt_pct(metrics.get('qty_change', 0))})"
-                    price_str = f"{fmt_int(avg_price)} ₽ ({fmt_pct(metrics.get('price_change', 0))})"
-                    rev_str = f"{fmt_int(total_rev_exact)} ₽ ({fmt_pct(metrics.get('rev_change', 0))})"
-
-                    stats_text = (
-                        f"Средний спрос: {qty_str}  •  "
-                        f"Средняя цена: {price_str}  •  "
-                        f"Фактическая выручка: {rev_str}  •  "
-                        f"Прогноз на 2026: {fmt_int(forecast_2026)} ₽"
-                    )
-                    self.stats_label.config(text=stats_text)
-
-            self.export_btn.config(state="normal")
-            self.export_plot_btn.config(state="normal")
+                self.export_btn.config(state="normal")
+                self.export_plot_btn.config(state="normal")
         except Exception as e:
             err_msg = str(e)
             self.root.after(0, lambda msg=err_msg: messagebox.showerror("Ошибка визуализации", msg))
@@ -724,6 +714,50 @@ class SalesAnalyzerApp:
             'current_year': current_year,
             'prev_year': prev_year
         }
+
+    def _calculate_seasonality(self, df):
+        if df.empty or 'Дата' not in df.columns:
+            return {}, []
+
+        df = df.copy()
+        df['месяц'] = df['Дата'].dt.month
+        df['Категория'] = df['Категория'].fillna('Прочее')
+
+        insights = []
+        seasonal_coeffs = {}
+
+        grouped = df.groupby(['Категория', 'месяц']).agg(
+            total_qty=('Количество продаж', 'sum')
+        ).reset_index()
+
+        for cat in grouped['Категория'].unique():
+            cat_data = grouped[grouped['Категория'] == cat]
+            avg_qty = cat_data['total_qty'].mean()
+            if avg_qty == 0:
+                continue
+
+            coeffs = {}
+            for _, row in cat_data.iterrows():
+                month = int(row['месяц'])
+                qty = row['total_qty']
+                coeff = qty / avg_qty if avg_qty > 0 else 1.0
+                coeffs[month] = coeff
+
+            seasonal_coeffs[cat] = coeffs
+            sorted_coeffs = sorted(coeffs.items(), key=lambda x: x[1], reverse=True)
+            peak_month, peak_val = sorted_coeffs[0] if sorted_coeffs else (1, 1.0)
+            low_month, low_val = sorted_coeffs[-1] if len(sorted_coeffs) > 1 else (1, 1.0)
+
+            if peak_val > 1.7:
+                month_name = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн',
+                              'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек'][peak_month - 1]
+                insights.append(f"{month_name} ×{peak_val:.1f} ({cat})")
+
+        insight_str = " • ".join(insights[:3])
+        if len(insights) > 3:
+            insight_str += " • ..."
+
+        return seasonal_coeffs, insight_str
 
     def _draw_animation(self, categories):
         for anim in [self.anim1, self.anim2]:
@@ -1074,6 +1108,71 @@ class SalesAnalyzerApp:
                     int(round(row['Количество продаж'] * row['Цена за шт'])),
                     int(round(row['оценка_выручки']))
                 ])
+
+            ws5 = wb.create_sheet("Сезонность")
+            ws5.append(["Месяц", "Все категории"] + sorted(self.seasonal_coeffs.keys()) if hasattr(self,
+                                                                                                   'seasonal_coeffs') else [])
+            for cell in ws5[1]:
+                cell.font = Font(bold=True)
+                cell.fill = PatternFill("solid", fgColor="E2F0D9")
+                cell.alignment = Alignment(horizontal="center")
+
+            month_names = ["Янв", "Фев", "Мар", "Апр", "Май", "Июн",
+                           "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек"]
+
+            for i, month in enumerate(range(1, 13)):
+                row = [month_names[i]]
+                if hasattr(self, 'df_full') and not self.df_full.empty:
+                    df = self.df_full
+                    df['месяц'] = df['Дата'].dt.month
+                    total_by_month = df.groupby('месяц')['Количество продаж'].sum()
+                    avg_total = total_by_month.mean()
+                    all_coeff = total_by_month.get(month, 0) / avg_total if avg_total else 1.0
+                    row.append(round(all_coeff, 2))
+                else:
+                    row.append(1.0)
+
+                if hasattr(self, 'seasonal_coeffs'):
+                    for cat in sorted(self.seasonal_coeffs.keys()):
+                        coeff = self.seasonal_coeffs[cat].get(month, 1.0)
+                        row.append(round(coeff, 2))
+                else:
+                    for _ in sorted(self.seasonal_coeffs.keys()):
+                        row.append(1.0)
+                ws5.append(row)
+
+            for row in ws5.iter_rows(min_row=2, max_row=13, min_col=2, max_col=ws5.max_column):
+                for cell in row:
+                    if isinstance(cell.value, (int, float)) and cell.value > 1.5:
+                        cell.fill = PatternFill("solid", fgColor="C6EFCE")  # светло-зелёный
+                        cell.font = Font(bold=True, color="006100")
+                    elif isinstance(cell.value, (int, float)) and cell.value < 0.7:
+                        cell.fill = PatternFill("solid", fgColor="F8CBAD")  # светло-оранжевый
+                        cell.font = Font(color="9C5700")
+
+            ws5.append([])
+            ws5.append(["Рекомендации"])
+            ws5.merge_cells(start_row=ws5.max_row, start_column=1, end_row=ws5.max_row, end_column=ws5.max_column)
+            ws5[ws5.max_row][0].font = Font(bold=True, color="1A5276")
+            ws5[ws5.max_row][0].alignment = Alignment(horizontal="left")
+
+            recs = []
+            if hasattr(self, 'seasonal_coeffs'):
+                for cat, coeffs in self.seasonal_coeffs.items():
+                    peaks = [m for m, c in coeffs.items() if c > 1.8]
+                    lows = [m for m, c in coeffs.items() if c < 0.6]
+                    if peaks:
+                        peak_months = ", ".join([month_names[m - 1] for m in sorted(peaks)])
+                        recs.append(f"• {cat}: повышенный спрос в {peak_months} → увеличить закупки за 1–2 мес.")
+                    if lows:
+                        low_months = ", ".join([month_names[m - 1] for m in sorted(lows)])
+                        recs.append(f"• {cat}: низкий спрос в {low_months} → избегать закупок, запускать акции.")
+
+            if not recs:
+                recs = ["• Чёткой сезонности не обнаружено. Рекомендуется собрать больше данных (≥2 года)."]
+
+            for rec in recs:
+                ws5.append([rec])
 
             wb.save(path)
             messagebox.showinfo("Успех", f"Прогноз сохранён:\n{os.path.basename(path)}")
