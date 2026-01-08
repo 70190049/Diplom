@@ -178,6 +178,14 @@ class SalesAnalyzerApp:
         self.export_plot_btn.pack(side=tk.LEFT, padx=5)
         self.export_plot_btn.config(state="disabled")
 
+        self.seasonality_btn = tk.Button(
+            self.center_container, text="Сезонность",
+            command=self.show_seasonality,
+            bg="#2f7f99", fg="white", font=("Arial", 10, "bold"), padx=10
+        )
+        self.seasonality_btn.pack(side=tk.LEFT, padx=5)
+        self.seasonality_btn.config(state="disabled")
+
         cat_frame = tk.Frame(self.control_frame, bg="#f8f9fa", pady=5)
         cat_frame.pack(expand=True)
 
@@ -235,6 +243,8 @@ class SalesAnalyzerApp:
         )
         self.stats_label.pack(side=tk.LEFT)
 
+        self.seasonality_frame = tk.Frame(root, bg="#f8f9fa")
+
         self.fig1, self.ax1 = plt.subplots(figsize=(6.5, 4.8))
         self.canvas1 = FigureCanvasTkAgg(self.fig1, self.charts_frame)
         self.canvas1.get_tk_widget().grid(row=0, column=0, padx=5, pady=5, sticky="nsew")
@@ -245,6 +255,10 @@ class SalesAnalyzerApp:
 
         self.charts_frame.grid_columnconfigure(0, weight=1)
         self.charts_frame.grid_columnconfigure(1, weight=1)
+
+        self.fig3, self.ax3 = plt.subplots(figsize=(8, 5))
+        self.canvas3 = FigureCanvasTkAgg(self.fig3, self.seasonality_frame)
+        self.canvas3.get_tk_widget().pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
     def toggle_theme(self):
         self.dark_theme = not self.dark_theme
@@ -653,6 +667,7 @@ class SalesAnalyzerApp:
 
                 self.export_btn.config(state="normal")
                 self.export_plot_btn.config(state="normal")
+                self.seasonality_btn.config(state="normal")
         except Exception as e:
             err_msg = str(e)
             self.root.after(0, lambda msg=err_msg: messagebox.showerror("Ошибка визуализации", msg))
@@ -998,6 +1013,94 @@ class SalesAnalyzerApp:
                 pass
 
         self.root.after(100, animate_step, 1)
+
+    def show_seasonality(self):
+        self.charts_frame.pack_forget()
+        self.stats_frame.pack_forget()
+        self.seasonality_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        self._draw_seasonality_graph()
+
+    def show_charts(self):
+        self.seasonality_frame.pack_forget()
+        self.charts_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        self.stats_frame.pack(fill=tk.X, padx=20, pady=(0, 10))
+
+    def _draw_seasonality_graph(self):
+        if self.df_full is None or self.df_full.empty:
+            self.ax3.clear()
+            self.ax3.text(0.5, 0.5, "Нет данных", ha='center', va='center', fontsize=14, color='gray')
+            self.canvas3.draw()
+            return
+
+        self.fig3.clear()
+        self.ax3 = self.fig3.add_subplot(111)
+
+        df = self.df_full.copy()
+        df['месяц'] = df['Дата'].dt.month
+        df['Категория'] = df['Категория'].fillna('Прочее')
+        grouped = df.groupby(['Категория', 'месяц'])['Количество продаж'].sum().reset_index()
+
+        month_names = ["Янв", "Фев", "Мар", "Апр", "Май", "Июн",
+                       "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек"]
+        x = np.arange(12)
+        colors = ['#3e7cb4', '#2c6c7e', '#3e55b4', '#1a414c', '#11442e']
+
+        total_by_month = df.groupby('месяц')['Количество продаж'].sum()
+        avg_total = total_by_month.mean() if not total_by_month.empty else 1
+        all_coeffs = [total_by_month.get(i + 1, 0) / avg_total for i in range(12)]
+        self.ax3.bar(x - 0.15, all_coeffs, width=0.3, label='Все категории',
+                     color='lightgray', alpha=0.7, edgecolor='gray')
+
+        categories = self.selected_categories
+        if "Все категории" in categories:
+            categories = df['Категория'].dropna().unique().tolist()
+
+        max_height = 0
+        highlights = []
+        for idx, cat in enumerate(categories[:5]):  # ≤5
+            cat_data = grouped[grouped['Категория'] == cat]
+            if cat_data.empty:
+                continue
+            avg = cat_data['Количество продаж'].mean()
+            coeffs = [cat_data[cat_data['месяц'] == i + 1]['Количество продаж'].sum() / avg
+                      if avg > 0 else 1.0 for i in range(12)]
+            offset = 0.15 + idx * 0.12
+            self.ax3.bar(x + offset, coeffs, width=0.1,
+                         label=cat, color=colors[idx % 10], alpha=0.9)
+            max_height = max(max_height, max(coeffs))
+            for m, c in enumerate(coeffs):
+                if c > 1.8:
+                    highlights.append(f"{month_names[m]} ×{c:.1f} ({cat})")
+
+        self.ax3.set_xticks(x)
+        self.ax3.set_xticklabels(month_names, fontsize=10)
+        self.ax3.set_ylabel('Сезонный коэффициент', fontsize=11)
+        self.ax3.set_title('Сезонность спроса по месяцам', fontsize=13, fontweight='bold')
+        self.ax3.axhline(1.0, color='black', linestyle='--', linewidth=1, alpha=0.6)
+        self.ax3.grid(True, axis='y', linestyle='--', alpha=0.5)
+        self.ax3.set_ylim(0, max(2.5, max_height * 1.1))
+
+        legend = self.ax3.legend(loc='upper right', fontsize=9, frameon=True)
+        legend.get_frame().set_alpha(0.9)
+
+        if highlights:
+            insight = " • ".join(highlights[:3])
+            self.ax3.text(0.5, -0.15, f"Топ-сезонность: {insight}",
+                          transform=self.ax3.transAxes, ha='center',
+                          fontsize=10, bbox=dict(boxstyle="round,pad=0.3", facecolor="lightyellow", edgecolor="orange"))
+
+        bg = "#1e1e1e" if self.dark_theme else "white"
+        fg = "white" if self.dark_theme else "#2c3e50"
+        self.fig3.patch.set_facecolor(bg)
+        self.ax3.set_facecolor(bg)
+        self.ax3.tick_params(colors=fg)
+        self.ax3.xaxis.label.set_color(fg)
+        self.ax3.yaxis.label.set_color(fg)
+        self.ax3.title.set_color(fg)
+        for spine in self.ax3.spines.values():
+            spine.set_color(fg)
+
+        self.canvas3.draw()
 
     def export_to_excel(self):
         if self.df_full is None:
