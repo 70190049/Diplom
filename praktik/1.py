@@ -1115,7 +1115,7 @@ class SalesAnalyzerApp:
                        "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек"]
         x = np.arange(12)
 
-        top_categories = list(self.seasonal_coeffs.keys())[:5]  # максимум 5
+        top_categories = list(self.seasonal_coeffs.keys())[:5]
 
         total_by_month = df.groupby('месяц')['Количество продаж'].sum()
         avg_total = total_by_month.mean() if not total_by_month.empty else 1
@@ -1150,8 +1150,28 @@ class SalesAnalyzerApp:
         self.ax3.grid(True, axis='y', linestyle='--', alpha=0.5)
         self.ax3.set_ylim(0, max(2.5, max_height * 1.1))
 
-        legend = self.ax3.legend(loc='upper right', fontsize=9, frameon=True)
+        legend = self.ax3.legend(
+            loc='upper left',
+            bbox_to_anchor=(0.0, -0.27),
+            fontsize=8,
+            ncol=1 if len(self.ax3.get_legend_handles_labels()[0]) < 5 else 2,
+            frameon=True
+        )
         legend.get_frame().set_alpha(0.9)
+
+        if self.dark_theme:
+            legend_bg = "#3a3f4b"
+            legend_edge = "#555"
+            legend_text = "white"
+        else:
+            legend_bg = "white"
+            legend_edge = "lightgray"
+            legend_text = "#2c3e50"
+
+        legend.get_frame().set_facecolor(legend_bg)
+        legend.get_frame().set_edgecolor(legend_edge)
+        for text in legend.get_texts():
+            text.set_color(legend_text)
 
         bg = "#1e1e1e" if self.dark_theme else "white"
         fg = "white" if self.dark_theme else "#2c3e50"
@@ -1164,6 +1184,7 @@ class SalesAnalyzerApp:
         for spine in self.ax3.spines.values():
             spine.set_color(fg)
 
+        self.fig3.subplots_adjust(bottom=0.37)
         self.canvas3.draw()
 
         recommendations = self._generate_seasonality_recommendations()
@@ -1317,10 +1338,10 @@ class SalesAnalyzerApp:
             for row in ws5.iter_rows(min_row=2, max_row=13, min_col=2, max_col=ws5.max_column):
                 for cell in row:
                     if isinstance(cell.value, (int, float)) and cell.value > 1.5:
-                        cell.fill = PatternFill("solid", fgColor="C6EFCE")  # светло-зелёный
+                        cell.fill = PatternFill("solid", fgColor="C6EFCE")
                         cell.font = Font(bold=True, color="006100")
                     elif isinstance(cell.value, (int, float)) and cell.value < 0.7:
-                        cell.fill = PatternFill("solid", fgColor="F8CBAD")  # светло-оранжевый
+                        cell.fill = PatternFill("solid", fgColor="F8CBAD")
                         cell.font = Font(color="9C5700")
 
             ws5.append([])
