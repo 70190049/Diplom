@@ -111,7 +111,7 @@ class SalesAnalyzerApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Анализатор продаж")
-        self.root.geometry("1630x700")
+        self.root.geometry("1630x715")
         self.root.configure(bg="#f8f9fa")
         self.root.protocol("WM_DELETE_WINDOW", self._on_closing)
 
@@ -283,9 +283,9 @@ class SalesAnalyzerApp:
         self.seasonality_graph_frame = tk.Frame(self.seasonality_frame, bg="#f8f9fa")
         self.seasonality_graph_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-        self.fig3, self.ax3 = plt.subplots(figsize=(8, 5))
+        self.fig3, self.ax3 = plt.subplots(figsize=(9.5, 4.8))
         self.canvas3 = FigureCanvasTkAgg(self.fig3, self.seasonality_graph_frame)
-        self.canvas3.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+        self.canvas3.get_tk_widget().pack(side=tk.LEFT, padx=5, pady=5, anchor="nw")
 
     def toggle_theme(self):
         self.dark_theme = not self.dark_theme
@@ -1099,12 +1099,6 @@ class SalesAnalyzerApp:
 
         legend = self.ax3.legend(loc='upper right', fontsize=9, frameon=True)
         legend.get_frame().set_alpha(0.9)
-
-        if highlights:
-            insight = " • ".join(highlights[:3])
-            self.ax3.text(0.5, -0.15, f"Топ-сезонность: {insight}",
-                          transform=self.ax3.transAxes, ha='center',
-                          fontsize=10, bbox=dict(boxstyle="round,pad=0.3", facecolor="lightyellow", edgecolor="orange"))
 
         bg = "#1e1e1e" if self.dark_theme else "white"
         fg = "white" if self.dark_theme else "#2c3e50"
