@@ -280,8 +280,34 @@ class SalesAnalyzerApp:
         self.charts_frame.grid_columnconfigure(0, weight=1)
         self.charts_frame.grid_columnconfigure(1, weight=1)
 
-        self.seasonality_graph_frame = tk.Frame(self.seasonality_frame, bg="#f8f9fa")
-        self.seasonality_graph_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        self.seasonality_content_frame = tk.Frame(self.seasonality_frame, bg="#f8f9fa")
+        self.seasonality_content_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        self.seasonality_graph_frame = tk.Frame(self.seasonality_content_frame, bg="#f8f9fa")
+        self.seasonality_graph_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
+
+        self.seasonality_text_frame = tk.Frame(self.seasonality_content_frame, bg="#f8f9fa", width=750, height=350)
+        self.seasonality_text_frame.pack(side=tk.RIGHT, padx=(10, 20), pady=(0, 100))
+        self.seasonality_text_frame.pack_propagate(False)
+
+        rec_title = tk.Label(
+            self.seasonality_text_frame,
+            text="Рекомендации",
+            font=("Arial", 14, "bold"),
+            fg="#1a5276",
+            bg="#f8f9fa"
+        )
+        rec_title.pack(side=tk.TOP, anchor="w", padx=10, pady=(10, 5))
+
+        self.seasonality_text_widget = tk.Text(
+            self.seasonality_text_frame,
+            wrap=tk.WORD,
+            font=("Arial", 10),
+            padx=10,
+            pady=10,
+            state=tk.DISABLED
+        )
+        self.seasonality_text_widget.pack(fill=tk.BOTH, expand=True)
 
         self.fig3, self.ax3 = plt.subplots(figsize=(9.5, 4.8))
         self.canvas3 = FigureCanvasTkAgg(self.fig3, self.seasonality_graph_frame)
@@ -376,6 +402,11 @@ class SalesAnalyzerApp:
             self.canvas1.draw()
         if hasattr(self, 'canvas2'):
             self.canvas2.draw()
+
+        if hasattr(self, 'seasonality_text_widget') and self.seasonality_text_widget:
+            text_bg = "#2d2d2d" if self.dark_theme else "white"
+            text_fg = "white" if self.dark_theme else "#2c3e50"
+            self.seasonality_text_widget.config(bg=text_bg, fg=text_fg, insertbackground=text_fg)
 
     def _on_closing(self):
         for anim in [self.anim1, self.anim2]:
@@ -792,6 +823,28 @@ class SalesAnalyzerApp:
             insight_str += " • ..."
         return seasonal_coeffs, insight_str
 
+    def _generate_seasonality_recommendations(self):
+        if not hasattr(self, 'seasonal_coeffs') or not self.seasonal_coeffs:
+            return "Чёткой сезонности не обнаружено.\nРекомендуется собрать больше данных (≥2 года)."
+
+        month_names = ["Янв", "Фев", "Мар", "Апр", "Май", "Июн",
+                       "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек"]
+        recs = []
+        for cat, coeffs in self.seasonal_coeffs.items():
+            peaks = [m for m, c in coeffs.items() if c > 1.8]
+            lows = [m for m, c in coeffs.items() if c < 0.6]
+            if peaks:
+                peak_months = ", ".join([month_names[m - 1] for m in sorted(peaks)])
+                recs.append(f"• {cat}: повышенный спрос в {peak_months} → увеличить закупки за 1–2 мес.")
+            if lows:
+                low_months = ", ".join([month_names[m - 1] for m in sorted(lows)])
+                recs.append(f"• {cat}: низкий спрос в {low_months} → избегать закупок, запускать акции.")
+
+        if not recs:
+            return "Чёткой сезонности не обнаружено.\nРекомендуется собрать больше данных (≥2 года)."
+
+        return "\n".join(recs)
+
     def _draw_animation(self, categories):
         for anim in [self.anim1, self.anim2]:
             if anim:
@@ -1112,6 +1165,12 @@ class SalesAnalyzerApp:
             spine.set_color(fg)
 
         self.canvas3.draw()
+
+        recommendations = self._generate_seasonality_recommendations()
+        self.seasonality_text_widget.config(state=tk.NORMAL)
+        self.seasonality_text_widget.delete(1.0, tk.END)
+        self.seasonality_text_widget.insert(tk.END, recommendations)
+        self.seasonality_text_widget.config(state=tk.DISABLED)
 
     def export_to_excel(self):
         if self.df_full is None:
