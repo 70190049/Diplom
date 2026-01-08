@@ -226,6 +226,7 @@ class SalesAnalyzerApp:
         self.future_by_cat = {}
         self.is_loading = False
         self.anim1 = self.anim2 = None
+        self.anim3_bars = []
 
         self.charts_frame = tk.Frame(root, bg="#f8f9fa")
         self.charts_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
@@ -1101,6 +1102,11 @@ class SalesAnalyzerApp:
             self.ax3.clear()
             self.ax3.text(0.5, 0.5, "Нет данных", ha='center', va='center', fontsize=14, color='gray')
             self.canvas3.draw()
+            if hasattr(self, 'seasonality_text_widget') and self.seasonality_text_widget:
+                self.seasonality_text_widget.config(state=tk.NORMAL)
+                self.seasonality_text_widget.delete(1.0, tk.END)
+                self.seasonality_text_widget.insert(tk.END, "Нет данных для анализа сезонности.")
+                self.seasonality_text_widget.config(state=tk.DISABLED)
             return
 
         self.fig3.clear()
@@ -1120,13 +1126,15 @@ class SalesAnalyzerApp:
         total_by_month = df.groupby('месяц')['Количество продаж'].sum()
         avg_total = total_by_month.mean() if not total_by_month.empty else 1
         all_coeffs = [total_by_month.get(i + 1, 0) / avg_total for i in range(12)]
-        self.ax3.bar(x - 0.15, all_coeffs, width=0.3, label='Все категории',
-                     color='lightgray', alpha=0.7, edgecolor='gray')
+        bars_all = self.ax3.bar(x - 0.15, all_coeffs, width=0.3, label='Все категории',
+                                color='lightgray', alpha=0.0, edgecolor='gray')
 
         colors = ['#3e7cb4', '#2c6c7e', '#3e55b4', '#1a414c', '#11442e']
 
         max_height = 0
         highlights = []
+        bars_lines = []
+
         for idx, cat in enumerate(top_categories):
             cat_data = grouped[grouped['Категория'] == cat]
             if cat_data.empty:
@@ -1135,8 +1143,9 @@ class SalesAnalyzerApp:
             coeffs = [cat_data[cat_data['месяц'] == i + 1]['Количество продаж'].sum() / avg
                       if avg > 0 else 1.0 for i in range(12)]
             offset = 0.15 + idx * 0.12
-            self.ax3.bar(x + offset, coeffs, width=0.1,
-                         label=cat, color=colors[idx % len(colors)], alpha=0.9)
+            bars_cat = self.ax3.bar(x + offset, coeffs, width=0.1,
+                                    label=cat, color=colors[idx % len(colors)], alpha=0.0)
+            bars_lines.extend(bars_cat)
             max_height = max(max_height, max(coeffs))
             for m, c in enumerate(coeffs):
                 if c > 1.8:
@@ -1154,7 +1163,7 @@ class SalesAnalyzerApp:
             loc='upper left',
             bbox_to_anchor=(0.0, -0.27),
             fontsize=8,
-            ncol=1 if len(self.ax3.get_legend_handles_labels()[0]) < 5 else 2,
+            ncol=1 if len(top_categories) + 1 < 5 else 2,
             frameon=True
         )
         legend.get_frame().set_alpha(0.9)
@@ -1187,11 +1196,27 @@ class SalesAnalyzerApp:
         self.fig3.subplots_adjust(bottom=0.37)
         self.canvas3.draw()
 
+        self.anim3_bars = [rect for rect in bars_all] + bars_lines
+
         recommendations = self._generate_seasonality_recommendations()
-        self.seasonality_text_widget.config(state=tk.NORMAL)
-        self.seasonality_text_widget.delete(1.0, tk.END)
-        self.seasonality_text_widget.insert(tk.END, recommendations)
-        self.seasonality_text_widget.config(state=tk.DISABLED)
+        if hasattr(self, 'seasonality_text_widget') and self.seasonality_text_widget:
+            self.seasonality_text_widget.config(state=tk.NORMAL)
+            self.seasonality_text_widget.delete(1.0, tk.END)
+            self.seasonality_text_widget.insert(tk.END, recommendations)
+            self.seasonality_text_widget.config(state=tk.DISABLED)
+
+        steps = 10
+        delay = 60
+
+        def animate_step(step):
+            alpha = step / steps
+            for rect in self.anim3_bars:
+                rect.set_alpha(alpha)
+            self.canvas3.draw_idle()
+            if step < steps:
+                self.root.after(delay, animate_step, step + 1)
+
+        self.root.after(100, animate_step, 1)
 
     def export_to_excel(self):
         if self.df_full is None:
