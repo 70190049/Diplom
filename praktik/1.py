@@ -245,6 +245,30 @@ class SalesAnalyzerApp:
 
         self.seasonality_frame = tk.Frame(root, bg="#f8f9fa")
 
+        self.seasonality_top_frame = tk.Frame(self.seasonality_frame, bg="#f8f9fa")
+        self.seasonality_top_frame.pack(fill=tk.X, padx=10, pady=(10, 0))
+
+        self.back_from_seasonality_btn = tk.Button(
+            self.seasonality_top_frame,
+            text="Назад к графикам",
+            command=self.show_charts,
+            bg="#2c3e50",
+            fg="white",
+            font=("Arial", 10, "bold"),
+            padx=15,
+            pady=5
+        )
+        self.back_from_seasonality_btn.pack(side=tk.RIGHT)
+
+        seasonality_title = tk.Label(
+            self.seasonality_top_frame,
+            text="Сезонность спроса по месяцам",
+            font=("Arial", 14, "bold"),
+            fg="#1a5276",
+            bg="#f8f9fa"
+        )
+        seasonality_title.pack(side=tk.LEFT, padx=10)
+
         self.fig1, self.ax1 = plt.subplots(figsize=(6.5, 4.8))
         self.canvas1 = FigureCanvasTkAgg(self.fig1, self.charts_frame)
         self.canvas1.get_tk_widget().grid(row=0, column=0, padx=5, pady=5, sticky="nsew")
@@ -256,9 +280,12 @@ class SalesAnalyzerApp:
         self.charts_frame.grid_columnconfigure(0, weight=1)
         self.charts_frame.grid_columnconfigure(1, weight=1)
 
+        self.seasonality_graph_frame = tk.Frame(self.seasonality_frame, bg="#f8f9fa")
+        self.seasonality_graph_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
         self.fig3, self.ax3 = plt.subplots(figsize=(8, 5))
-        self.canvas3 = FigureCanvasTkAgg(self.fig3, self.seasonality_frame)
-        self.canvas3.get_tk_widget().pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        self.canvas3 = FigureCanvasTkAgg(self.fig3, self.seasonality_graph_frame)
+        self.canvas3.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
     def toggle_theme(self):
         self.dark_theme = not self.dark_theme
