@@ -759,38 +759,30 @@ class SalesAnalyzerApp:
 
     def _calculate_seasonality(self, df):
         if df.empty or 'Дата' not in df.columns:
-            return {}, []
+            return {}, ""
 
         df = df.copy()
         df['месяц'] = df['Дата'].dt.month
         df['Категория'] = df['Категория'].fillna('Прочее')
+        grouped = df.groupby(['Категория', 'месяц'])['Количество продаж'].sum().reset_index()
 
-        insights = []
         seasonal_coeffs = {}
-
-        grouped = df.groupby(['Категория', 'месяц']).agg(
-            total_qty=('Количество продаж', 'sum')
-        ).reset_index()
+        insights = []
 
         for cat in grouped['Категория'].unique():
             cat_data = grouped[grouped['Категория'] == cat]
-            avg_qty = cat_data['total_qty'].mean()
+            avg_qty = cat_data['Количество продаж'].mean()
             if avg_qty == 0:
                 continue
+            coeffs = {
+                int(row['месяц']): row['Количество продаж'] / avg_qty
+                for _, row in cat_data.iterrows()
+            }
 
-            coeffs = {}
-            for _, row in cat_data.iterrows():
-                month = int(row['месяц'])
-                qty = row['total_qty']
-                coeff = qty / avg_qty if avg_qty > 0 else 1.0
-                coeffs[month] = coeff
+            if max(coeffs.values()) > 1.7:
+                seasonal_coeffs[cat] = coeffs
 
-            seasonal_coeffs[cat] = coeffs
-            sorted_coeffs = sorted(coeffs.items(), key=lambda x: x[1], reverse=True)
-            peak_month, peak_val = sorted_coeffs[0] if sorted_coeffs else (1, 1.0)
-            low_month, low_val = sorted_coeffs[-1] if len(sorted_coeffs) > 1 else (1, 1.0)
-
-            if peak_val > 1.7:
+                peak_month, peak_val = max(coeffs.items(), key=lambda x: x[1])
                 month_name = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн',
                               'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек'][peak_month - 1]
                 insights.append(f"{month_name} ×{peak_val:.1f} ({cat})")
@@ -798,7 +790,6 @@ class SalesAnalyzerApp:
         insight_str = " • ".join(insights[:3])
         if len(insights) > 3:
             insight_str += " • ..."
-
         return seasonal_coeffs, insight_str
 
     def _draw_animation(self, categories):
@@ -1070,7 +1061,8 @@ class SalesAnalyzerApp:
         month_names = ["Янв", "Фев", "Мар", "Апр", "Май", "Июн",
                        "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек"]
         x = np.arange(12)
-        colors = ['#3e7cb4', '#2c6c7e', '#3e55b4', '#1a414c', '#11442e']
+
+        top_categories = list(self.seasonal_coeffs.keys())[:5]  # максимум 5
 
         total_by_month = df.groupby('месяц')['Количество продаж'].sum()
         avg_total = total_by_month.mean() if not total_by_month.empty else 1
@@ -1078,13 +1070,11 @@ class SalesAnalyzerApp:
         self.ax3.bar(x - 0.15, all_coeffs, width=0.3, label='Все категории',
                      color='lightgray', alpha=0.7, edgecolor='gray')
 
-        categories = self.selected_categories
-        if "Все категории" in categories:
-            categories = df['Категория'].dropna().unique().tolist()
+        colors = ['#3e7cb4', '#2c6c7e', '#3e55b4', '#1a414c', '#11442e']
 
         max_height = 0
         highlights = []
-        for idx, cat in enumerate(categories[:5]):  # ≤5
+        for idx, cat in enumerate(top_categories):
             cat_data = grouped[grouped['Категория'] == cat]
             if cat_data.empty:
                 continue
@@ -1093,7 +1083,7 @@ class SalesAnalyzerApp:
                       if avg > 0 else 1.0 for i in range(12)]
             offset = 0.15 + idx * 0.12
             self.ax3.bar(x + offset, coeffs, width=0.1,
-                         label=cat, color=colors[idx % 10], alpha=0.9)
+                         label=cat, color=colors[idx % len(colors)], alpha=0.9)
             max_height = max(max_height, max(coeffs))
             for m, c in enumerate(coeffs):
                 if c > 1.8:
