@@ -228,6 +228,7 @@ class SalesAnalyzerApp:
         self.anim1 = self.anim2 = None
         self.current_view = "charts"
         self.anim3_bars = []
+        self.seasonal_coeffs = {}
 
         self.charts_frame = tk.Frame(root, bg="#f8f9fa")
         self.charts_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
@@ -330,6 +331,7 @@ class SalesAnalyzerApp:
     def toggle_theme(self):
         self.dark_theme = not self.dark_theme
 
+        # Цвета для темы
         if self.dark_theme:
             bg_color = "#2d2d2d"
             fg_color = "white"
@@ -337,6 +339,8 @@ class SalesAnalyzerApp:
             canvas_bg = "#1e1e1e"
             legend_bg = "#3a3f4b"
             legend_edge = "#555"
+            text_bg = "#2d2d2d"
+            text_fg = "white"
         else:
             bg_color = "#f8f9fa"
             fg_color = "#2c3e50"
@@ -344,6 +348,8 @@ class SalesAnalyzerApp:
             canvas_bg = "white"
             legend_bg = "white"
             legend_edge = "lightgray"
+            text_bg = "white"
+            text_fg = "#2c3e50"
 
         self.root.config(bg=bg_color)
         self.top_frame.config(bg=bg_color)
@@ -351,6 +357,17 @@ class SalesAnalyzerApp:
         self.center_container.config(bg=bg_color)
         self.stats_frame.config(bg=bg_color)
         self.charts_frame.config(bg=bg_color)
+        self.seasonality_frame.config(bg=bg_color)
+        self.seasonality_top_frame.config(bg=bg_color)
+        self.seasonality_content_frame.config(bg=bg_color)
+        self.seasonality_graph_frame.config(bg=bg_color)
+        self.seasonality_text_frame.config(bg=bg_color)
+        if hasattr(self, 'seasonality_bottom_frame'):
+            self.seasonality_bottom_frame.config(bg=bg_color)
+
+        for widget in self.top_frame.winfo_children() + self.center_container.winfo_children():
+            if isinstance(widget, tk.Label):
+                widget.config(bg=bg_color, fg=fg_color)
 
         cat_frame = next(
             (w for w in self.control_frame.winfo_children() if isinstance(w, tk.Frame) and w != self.center_container),
@@ -358,14 +375,42 @@ class SalesAnalyzerApp:
         )
         if cat_frame:
             cat_frame.config(bg=bg_color)
-
-        for widget in self.top_frame.winfo_children() + self.center_container.winfo_children():
-            if isinstance(widget, tk.Label):
-                widget.config(bg=bg_color, fg=fg_color)
-        if cat_frame:
             for widget in cat_frame.winfo_children():
                 if isinstance(widget, tk.Label):
                     widget.config(bg=bg_color, fg=fg_color)
+
+        self.theme_btn.config(bg="#7f8c8d" if not self.dark_theme else "#34495e", fg="white")
+        self.browse_btn.config(bg="#3498db" if not self.dark_theme else "#2980b9", fg="white")
+        self.load_btn.config(bg="#27ae60" if not self.dark_theme else "#218359", fg="white")
+        self.export_btn.config(bg="#218359" if not self.dark_theme else "#1a5276", fg="white")
+        self.export_plot_btn.config(bg="#21837a" if not self.dark_theme else "#1a5276", fg="white")
+        self.seasonality_btn.config(bg="#2f7f99" if not self.dark_theme else "#1a5276", fg="white")
+        self.back_from_seasonality_btn.config(bg="#2c3e50", fg="white")
+
+        for widget in self.seasonality_top_frame.winfo_children():
+            if isinstance(widget, tk.Label):
+                widget.config(bg=bg_color, fg=fg_color)
+
+        for widget in self.seasonality_text_frame.winfo_children():
+            if isinstance(widget, tk.Label) and widget.cget("text") == "Рекомендации":
+                widget.config(bg=bg_color, fg=fg_color)
+
+        self.stats_label.config(bg=bg_color, fg=stats_fg)
+        if hasattr(self, 'seasonality_stats_label'):
+            self.seasonality_stats_label.config(bg=bg_color, fg=stats_fg)
+
+        if hasattr(self, 'seasonality_text_widget'):
+            self.seasonality_text_widget.config(bg=text_bg, fg=text_fg, insertbackground=text_fg)
+
+        for fig, ax in [(self.fig1, self.ax1), (self.fig2, self.ax2)]:
+            fig.patch.set_facecolor(canvas_bg)
+            ax.set_facecolor(canvas_bg)
+            ax.tick_params(colors=fg_color)
+            ax.xaxis.label.set_color(fg_color)
+            ax.yaxis.label.set_color(fg_color)
+            ax.title.set_color(fg_color)
+            for spine in ax.spines.values():
+                spine.set_color(fg_color)
 
         for ax in [self.ax1, self.ax2]:
             legend = ax.get_legend()
@@ -374,33 +419,8 @@ class SalesAnalyzerApp:
                 frame.set_facecolor(legend_bg)
                 frame.set_edgecolor(legend_edge)
                 frame.set_alpha(0.9)
-
                 for text in legend.get_texts():
                     text.set_color(fg_color)
-
-        if hasattr(self, 'fig1') and self.fig1:
-            self.fig1.patch.set_facecolor(canvas_bg)
-            self.ax1.set_facecolor(canvas_bg)
-            self.ax1.spines['bottom'].set_color(fg_color)
-            self.ax1.spines['left'].set_color(fg_color)
-            self.ax1.tick_params(colors=fg_color)
-            self.ax1.xaxis.label.set_color(fg_color)
-            self.ax1.yaxis.label.set_color(fg_color)
-            self.ax1.title.set_color(fg_color)
-            for text in self.ax1.get_legend().get_texts() if self.ax1.get_legend() else []:
-                text.set_color(fg_color)
-
-        if hasattr(self, 'fig2') and self.fig2:
-            self.fig2.patch.set_facecolor(canvas_bg)
-            self.ax2.set_facecolor(canvas_bg)
-            self.ax2.spines['bottom'].set_color(fg_color)
-            self.ax2.spines['left'].set_color(fg_color)
-            self.ax2.tick_params(colors=fg_color)
-            self.ax2.xaxis.label.set_color(fg_color)
-            self.ax2.yaxis.label.set_color(fg_color)
-            self.ax2.title.set_color(fg_color)
-            for text in self.ax2.get_legend().get_texts() if self.ax2.get_legend() else []:
-                text.set_color(fg_color)
 
         if hasattr(self, 'ax1b') and self.ax1b:
             revenue_color = "white" if self.dark_theme else "black"
@@ -408,20 +428,30 @@ class SalesAnalyzerApp:
             self.ax1b.tick_params(axis='y', colors=revenue_color)
             for spine in self.ax1b.spines.values():
                 spine.set_color(revenue_color)
-            self.canvas1.draw_idle()
 
-        self.stats_label.config(bg=bg_color, fg=stats_fg)
-        self.seasonality_stats_label.config(bg=bg_color, fg=stats_fg)
+        if self.df_full is not None and not self.df_full.empty:
+            self.fig3.patch.set_facecolor(canvas_bg)
+            self.ax3.set_facecolor(canvas_bg)
+            self.ax3.tick_params(colors=fg_color)
+            self.ax3.xaxis.label.set_color(fg_color)
+            self.ax3.yaxis.label.set_color(fg_color)
+            self.ax3.title.set_color(fg_color)
+            for spine in self.ax3.spines.values():
+                spine.set_color(fg_color)
 
-        if hasattr(self, 'canvas1'):
-            self.canvas1.draw()
-        if hasattr(self, 'canvas2'):
-            self.canvas2.draw()
+            legend3 = self.ax3.get_legend()
+            if legend3:
+                frame = legend3.get_frame()
+                frame.set_facecolor(legend_bg)
+                frame.set_edgecolor(legend_edge)
+                frame.set_alpha(0.9)
+                for text in legend3.get_texts():
+                    text.set_color(fg_color)
 
-        if hasattr(self, 'seasonality_text_widget') and self.seasonality_text_widget:
-            text_bg = "#2d2d2d" if self.dark_theme else "white"
-            text_fg = "white" if self.dark_theme else "#2c3e50"
-            self.seasonality_text_widget.config(bg=text_bg, fg=text_fg, insertbackground=text_fg)
+            self.canvas3.draw()
+
+        self.canvas1.draw()
+        self.canvas2.draw()
 
     def _on_closing(self):
         for anim in [self.anim1, self.anim2]:
@@ -1112,6 +1142,8 @@ class SalesAnalyzerApp:
             seasonal_coeffs, _ = self._calculate_seasonality(self.df_full)
             self.seasonal_coeffs = seasonal_coeffs
             self._draw_seasonality_graph()
+        else:
+            self._draw_seasonality_graph()
 
     def show_charts(self):
         self.current_view = "charts"
@@ -1127,11 +1159,6 @@ class SalesAnalyzerApp:
             self.ax3.clear()
             self.ax3.text(0.5, 0.5, "Нет данных", ha='center', va='center', fontsize=14, color='gray')
             self.canvas3.draw()
-            if hasattr(self, 'seasonality_text_widget') and self.seasonality_text_widget:
-                self.seasonality_text_widget.config(state=tk.NORMAL)
-                self.seasonality_text_widget.delete(1.0, tk.END)
-                self.seasonality_text_widget.insert(tk.END, "Нет данных для анализа сезонности.")
-                self.seasonality_text_widget.config(state=tk.DISABLED)
             return
 
         self.fig3.clear()
@@ -1151,11 +1178,11 @@ class SalesAnalyzerApp:
         total_by_month = df.groupby('месяц')['Количество продаж'].sum()
         avg_total = total_by_month.mean() if not total_by_month.empty else 1
         all_coeffs = [total_by_month.get(i + 1, 0) / avg_total for i in range(12)]
+
         bars_all = self.ax3.bar(x - 0.15, all_coeffs, width=0.3, label='Все категории',
-                                color='lightgray', alpha=0.0, edgecolor='gray')
+                                color='lightgray', alpha=0.7, edgecolor='gray')
 
         colors = ['#3e7cb4', '#2c6c7e', '#3e55b4', '#1a414c', '#11442e']
-
         max_height = 0
         highlights = []
         bars_lines = []
@@ -1169,7 +1196,7 @@ class SalesAnalyzerApp:
                       if avg > 0 else 1.0 for i in range(12)]
             offset = 0.15 + idx * 0.12
             bars_cat = self.ax3.bar(x + offset, coeffs, width=0.1,
-                                    label=cat, color=colors[idx % len(colors)], alpha=0.0)
+                                    label=cat, color=colors[idx % len(colors)], alpha=0.9)
             bars_lines.extend(bars_cat)
             max_height = max(max_height, max(coeffs))
             for m, c in enumerate(coeffs):
@@ -1186,11 +1213,9 @@ class SalesAnalyzerApp:
 
         legend_elements = []
         legend_elements.append(Patch(facecolor='lightgray', alpha=0.7, edgecolor='gray', label='Все категории'))
-
         for idx, cat in enumerate(top_categories):
             color = colors[idx % len(colors)]
             legend_elements.append(Patch(facecolor=color, alpha=0.9, label=cat))
-
         legend = self.ax3.legend(
             handles=legend_elements,
             loc='upper left',
@@ -1205,18 +1230,20 @@ class SalesAnalyzerApp:
             legend_bg = "#3a3f4b"
             legend_edge = "#555"
             legend_text = "white"
+            bg = "#1e1e1e"
+            fg = "white"
         else:
             legend_bg = "white"
             legend_edge = "lightgray"
             legend_text = "#2c3e50"
+            bg = "white"
+            fg = "#2c3e50"
 
         legend.get_frame().set_facecolor(legend_bg)
         legend.get_frame().set_edgecolor(legend_edge)
         for text in legend.get_texts():
             text.set_color(legend_text)
 
-        bg = "#1e1e1e" if self.dark_theme else "white"
-        fg = "white" if self.dark_theme else "#2c3e50"
         self.fig3.patch.set_facecolor(bg)
         self.ax3.set_facecolor(bg)
         self.ax3.tick_params(colors=fg)
@@ -1227,12 +1254,11 @@ class SalesAnalyzerApp:
             spine.set_color(fg)
 
         self.fig3.subplots_adjust(bottom=0.37)
+        self.anim3_bars = [rect for rect in bars_all] + bars_lines
         self.canvas3.draw()
 
-        self.anim3_bars = [rect for rect in bars_all] + bars_lines
-
         recommendations = self._generate_seasonality_recommendations()
-        if hasattr(self, 'seasonality_text_widget') and self.seasonality_text_widget:
+        if hasattr(self, 'seasonality_text_widget'):
             self.seasonality_text_widget.config(state=tk.NORMAL)
             self.seasonality_text_widget.delete(1.0, tk.END)
             self.seasonality_text_widget.insert(tk.END, recommendations)
@@ -1252,6 +1278,46 @@ class SalesAnalyzerApp:
 
         steps = 10
         delay = 60
+
+        def animate_step(step):
+            alpha = step / steps
+            for rect in self.anim3_bars:
+                rect.set_alpha(alpha)
+            self.canvas3.draw_idle()
+            if step < steps:
+                self.root.after(delay, animate_step, step + 1)
+
+        self.root.after(100, animate_step, 1)
+
+        def animate_step(step):
+            alpha = step / steps
+            for rect in self.anim3_bars:
+                rect.set_alpha(alpha)
+            self.canvas3.draw_idle()
+            if step < steps:
+                self.root.after(delay, animate_step, step + 1)
+
+        self.root.after(100, animate_step, 1)
+
+        def animate_step(step):
+            alpha = step / steps
+            for rect in self.anim3_bars:
+                rect.set_alpha(alpha)
+            self.canvas3.draw_idle()
+            if step < steps:
+                self.root.after(delay, animate_step, step + 1)
+
+        self.root.after(100, animate_step, 1)
+
+        def animate_step(step):
+            alpha = step / steps
+            for rect in self.anim3_bars:
+                rect.set_alpha(alpha)
+            self.canvas3.draw_idle()
+            if step < steps:
+                self.root.after(delay, animate_step, step + 1)
+
+        self.root.after(100, animate_step, 1)
 
         def animate_step(step):
             alpha = step / steps
