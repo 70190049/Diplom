@@ -288,7 +288,7 @@ class SalesAnalyzerApp:
         self.seasonality_graph_frame = tk.Frame(self.seasonality_content_frame, bg="#f8f9fa")
         self.seasonality_graph_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
 
-        self.seasonality_text_frame = tk.Frame(self.seasonality_content_frame, bg="#f8f9fa", width=750, height=350)
+        self.seasonality_text_frame = tk.Frame(self.seasonality_content_frame, bg="#f8f9fa", width=750, height=340)
         self.seasonality_text_frame.pack(side=tk.RIGHT, padx=(10, 20), pady=(0, 100))
         self.seasonality_text_frame.pack_propagate(False)
 
@@ -311,7 +311,19 @@ class SalesAnalyzerApp:
         )
         self.seasonality_text_widget.pack(fill=tk.BOTH, expand=True)
 
-        self.fig3, self.ax3 = plt.subplots(figsize=(9.5, 4.8))
+        self.seasonality_bottom_frame = tk.Frame(self.seasonality_frame, bg="#f8f9fa")
+        self.seasonality_bottom_frame.pack(fill=tk.X, padx=20)
+        self.seasonality_stats_label = tk.Label(
+            self.seasonality_bottom_frame,
+            text="",
+            font=("Arial", 11),
+            fg="#2c3e50",
+            bg="#f8f9fa",
+            justify=tk.LEFT
+        )
+        self.seasonality_stats_label.pack(side=tk.LEFT)
+
+        self.fig3, self.ax3 = plt.subplots(figsize=(9.5, 4.3))
         self.canvas3 = FigureCanvasTkAgg(self.fig3, self.seasonality_graph_frame)
         self.canvas3.get_tk_widget().pack(side=tk.LEFT, padx=5, pady=5, anchor="nw")
 
@@ -399,6 +411,7 @@ class SalesAnalyzerApp:
             self.canvas1.draw_idle()
 
         self.stats_label.config(bg=bg_color, fg=stats_fg)
+        self.seasonality_stats_label.config(bg=bg_color, fg=stats_fg)
 
         if hasattr(self, 'canvas1'):
             self.canvas1.draw()
@@ -723,8 +736,6 @@ class SalesAnalyzerApp:
                     f"Фактич. выручка: {rev_str}",
                     f"Прогноз 2026: {fmt_int(forecast_2026)} ₽"
                 ]
-                if seasonality_text:
-                    stats_parts.append(f"Сезонность: {seasonality_text}")
                 stats_text = "  •  ".join(stats_parts)
                 self.stats_label.config(text=stats_text)
 
@@ -1226,6 +1237,18 @@ class SalesAnalyzerApp:
             self.seasonality_text_widget.delete(1.0, tk.END)
             self.seasonality_text_widget.insert(tk.END, recommendations)
             self.seasonality_text_widget.config(state=tk.DISABLED)
+
+        if hasattr(self, 'seasonal_coeffs') and self.seasonal_coeffs:
+            insights = []
+            for cat, coeffs in self.seasonal_coeffs.items():
+                peak_month, peak_val = max(coeffs.items(), key=lambda x: x[1])
+                month_name = ["Янв", "Фев", "Мар", "Апр", "Май", "Июн",
+                              "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек"][peak_month - 1]
+                insights.append(f"{month_name} ×{peak_val:.1f} ({cat})")
+            seasonality_summary = " • ".join(insights[:5])
+            self.seasonality_stats_label.config(text=f"Сезонность: {seasonality_summary}")
+        else:
+            self.seasonality_stats_label.config(text="Сезонность: данных недостаточно для анализа")
 
         steps = 10
         delay = 60
