@@ -1515,9 +1515,6 @@ class SalesAnalyzerApp:
 
     def export_plots(self):
         try:
-            self.canvas1.figure = self.fig1
-            self.canvas2.figure = self.fig2
-
             cat_name = "графики"
             if "Все категории" not in self.selected_categories:
                 cat_name = "_".join(self.selected_categories[:2])
@@ -1531,13 +1528,18 @@ class SalesAnalyzerApp:
                 return
 
             base = os.path.splitext(path)[0]
-            path1 = f"{base}_факт.png"
-            path2 = f"{base}_прогноз.png"
+            path1 = f"{base}_факт_и_оценка.png"
+            path2 = f"{base}_прогноз_2026.png"
+            path3 = f"{base}_сезонность.png"
 
             self.fig1.savefig(path1, dpi=150, bbox_inches='tight')
             self.fig2.savefig(path2, dpi=150, bbox_inches='tight')
+            self.fig3.savefig(path3, dpi=150, bbox_inches='tight')
 
-            messagebox.showinfo("Готово", f"Сохранено:\n{os.path.basename(path1)}\n{os.path.basename(path2)}")
+            messagebox.showinfo("Готово", f"Сохранено:\n"
+                                          f"{os.path.basename(path1)}\n"
+                                          f"{os.path.basename(path2)}\n"
+                                          f"{os.path.basename(path3)}")
         except Exception as e:
             messagebox.showerror("Ошибка", f"Не удалось сохранить графики:\n{e}")
 
