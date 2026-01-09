@@ -226,6 +226,7 @@ class SalesAnalyzerApp:
         self.future_by_cat = {}
         self.is_loading = False
         self.anim1 = self.anim2 = None
+        self.current_view = "charts"
         self.anim3_bars = []
 
         self.charts_frame = tk.Frame(root, bg="#f8f9fa")
@@ -681,15 +682,20 @@ class SalesAnalyzerApp:
 
     def _update_ui_with_results(self, categories):
         try:
-            self._draw_animation(categories)
+            seasonality_text = ""
             if self.df_full is not None and not self.df_full.empty:
                 seasonal_coeffs, seasonality_text = self._calculate_seasonality(self.df_full)
                 self.seasonal_coeffs = seasonal_coeffs
 
+            if self.current_view == "seasonality":
+                self._draw_seasonality_graph()
+            else:
+                self._draw_animation(categories)
+
+            if self.df_full is not None and not self.df_full.empty:
                 avg_qty = self.df_full['Количество продаж'].mean()
                 avg_price = self.df_full['Цена за шт'].mean()
                 total_rev_exact = (self.df_full['Количество продаж'] * self.df_full['Цена за шт']).sum()
-
                 if self.future_monthly is not None:
                     forecast_2026 = self.future_monthly['прогноз_выручка'].sum()
                 elif self.future_by_cat:
@@ -711,7 +717,6 @@ class SalesAnalyzerApp:
                 qty_str = f"{fmt_int(avg_qty)} шт. ({fmt_pct(metrics.get('qty_change', 0))})"
                 price_str = f"{fmt_int(avg_price)} ₽ ({fmt_pct(metrics.get('price_change', 0))})"
                 rev_str = f"{fmt_int(total_rev_exact)} ₽ ({fmt_pct(metrics.get('rev_change', 0))})"
-
                 stats_parts = [
                     f"Средний спрос: {qty_str}",
                     f"Средняя цена: {price_str}",
@@ -720,13 +725,13 @@ class SalesAnalyzerApp:
                 ]
                 if seasonality_text:
                     stats_parts.append(f"Сезонность: {seasonality_text}")
-
                 stats_text = "  •  ".join(stats_parts)
                 self.stats_label.config(text=stats_text)
 
-                self.export_btn.config(state="normal")
-                self.export_plot_btn.config(state="normal")
-                self.seasonality_btn.config(state="normal")
+            self.export_btn.config(state="normal")
+            self.export_plot_btn.config(state="normal")
+            self.seasonality_btn.config(state="normal")
+
         except Exception as e:
             err_msg = str(e)
             self.root.after(0, lambda msg=err_msg: messagebox.showerror("Ошибка визуализации", msg))
@@ -1087,15 +1092,24 @@ class SalesAnalyzerApp:
         self.root.after(100, animate_step, 1)
 
     def show_seasonality(self):
+        self.current_view = "seasonality"
         self.charts_frame.pack_forget()
         self.stats_frame.pack_forget()
         self.seasonality_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-        self._draw_seasonality_graph()
+
+        if self.df_full is not None and not self.df_full.empty:
+            seasonal_coeffs, _ = self._calculate_seasonality(self.df_full)
+            self.seasonal_coeffs = seasonal_coeffs
+            self._draw_seasonality_graph()
 
     def show_charts(self):
+        self.current_view = "charts"
         self.seasonality_frame.pack_forget()
         self.charts_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         self.stats_frame.pack(fill=tk.X, padx=20, pady=(0, 10))
+
+        if self.df_full is not None and not self.df_full.empty:
+            self._draw_animation(self.selected_categories)
 
     def _draw_seasonality_graph(self):
         if self.df_full is None or self.df_full.empty:
