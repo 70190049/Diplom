@@ -331,7 +331,6 @@ class SalesAnalyzerApp:
     def toggle_theme(self):
         self.dark_theme = not self.dark_theme
 
-        # Цвета для темы
         if self.dark_theme:
             bg_color = "#2d2d2d"
             fg_color = "white"
@@ -606,6 +605,9 @@ class SalesAnalyzerApp:
             monthly['месяц_str'] = monthly['месяц_period'].astype(str)
             monthly = monthly.sort_values('месяц_period').reset_index(drop=True)
             self.monthly_df = monthly
+
+            self.price_elasticity, self.discount_effect, elasticity_insight = self._calculate_price_elasticity_and_discount_effect(
+                df)
 
             if "Все категории" not in self.selected_categories and len(self.selected_categories) > 1:
                 for cat in self.selected_categories:
@@ -891,6 +893,56 @@ class SalesAnalyzerApp:
             return "Чёткой сезонности не обнаружено.\nРекомендуется собрать больше данных (≥2 года)."
 
         return "\n".join(recs)
+
+    def _calculate_price_elasticity_and_discount_effect(self, df):
+        if df.empty or 'Скидки' not in df.columns:
+            return {}, {}, ""
+
+        df = df.copy()
+        df['Скидки'] = pd.to_numeric(df['Скидки'], errors='coerce').fillna(0)
+        df['Цена со скидкой'] = df['Цена за шт'] * (1 - df['Скидки'] / 100)
+
+        elasticity = {}
+        discount_effect = {}
+        insights = []
+
+        for cat in df['Категория'].dropna().unique():
+            cat_df = df[df['Категория'] == cat]
+            if len(cat_df) < 10:
+                continue
+
+            cat_df = cat_df.sort_values('Дата')
+            cat_df['price_pct'] = cat_df['Цена за шт'].pct_change()
+            cat_df['qty_pct'] = cat_df['Количество продаж'].pct_change()
+            valid = cat_df[(cat_df['price_pct'].abs() > 0.01) & (cat_df['qty_pct'].abs() > 0.01)]
+            if len(valid) > 5:
+                el = (valid['qty_pct'] / valid['price_pct']).median()
+                elasticity[cat] = -el
+
+            with_disc = cat_df[cat_df['Скидки'] > 0]
+            without_disc = cat_df[cat_df['Скидки'] == 0]
+
+            if len(with_disc) > 5 and len(without_disc) > 5:
+                qty_w = with_disc['Количество продаж'].mean()
+                qty_wo = without_disc['Количество продаж'].mean()
+                rev_w = (with_disc['Цена со скидкой'] * with_disc['Количество продаж']).mean()
+                rev_wo = (without_disc['Цена за шт'] * without_disc['Количество продаж']).mean()
+
+                delta_qty = (qty_w - qty_wo) / qty_wo * 100 if qty_wo > 0 else 0
+                delta_rev = (rev_w - rev_wo) / rev_wo * 100 if rev_wo > 0 else 0
+
+                discount_effect[cat] = (delta_qty, delta_rev)
+
+                if delta_rev > 5:
+                    insights.append(f"Скидки эффективны: {cat} (+{delta_rev:.0f}% выручки)")
+                elif delta_rev < -5:
+                    insights.append(f"⚠Скидки вредят: {cat} ({delta_rev:.0f}% выручки)")
+
+        insight_str = " • ".join(insights[:2])
+        if len(insights) > 2:
+            insight_str += " • ..."
+
+        return elasticity, discount_effect, insight_str
 
     def _draw_animation(self, categories):
         for anim in [self.anim1, self.anim2]:
@@ -1503,6 +1555,43 @@ class SalesAnalyzerApp:
 
             for rec in recs:
                 ws5.append([rec])
+
+            ws6 = wb.create_sheet("Эластичность и скидки")
+            ws6.append(
+                ["Категория", "Эластичность", "Δ спрос при скидке, %", "Δ выручка при скидке, %", "Рекомендация"])
+            for cell in ws6[1]:
+                cell.font = Font(bold=True)
+                cell.fill = PatternFill("solid", fgColor="D0ECE7")
+                cell.alignment = Alignment(horizontal="center")
+
+            all_cats = set()
+            if hasattr(self, 'price_elasticity'):
+                all_cats.update(self.price_elasticity.keys())
+            if hasattr(self, 'discount_effect'):
+                all_cats.update(self.discount_effect.keys())
+
+            for cat in sorted(all_cats):
+                elasticity = self.price_elasticity.get(cat, 0)
+                delta_qty, delta_rev = self.discount_effect.get(cat, (0, 0))
+
+                if delta_rev > 5:
+                    rec = "Увеличить охват скидок"
+                elif delta_rev < -3:
+                    rec = "Пересмотреть механику скидок"
+                else:
+                    rec = "Оставить без изменений"
+
+                ws6.append([cat, round(elasticity, 2), round(delta_qty, 1), round(delta_rev, 1), rec])
+
+            for row in ws6.iter_rows(min_row=2, max_row=ws6.max_row, min_col=4, max_col=4):
+                cell = row[0]
+                if isinstance(cell.value, (int, float)):
+                    if cell.value > 5:
+                        cell.fill = PatternFill("solid", fgColor="C6EFCE")
+                        cell.font = Font(color="006100")
+                    elif cell.value < -3:
+                        cell.fill = PatternFill("solid", fgColor="F8CBAD")
+                        cell.font = Font(color="9C5700")
 
             wb.save(path)
             messagebox.showinfo("Успех", f"Прогноз сохранён:\n{os.path.basename(path)}")
