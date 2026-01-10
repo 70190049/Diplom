@@ -236,6 +236,7 @@ class SalesAnalyzerApp:
         self.anim1 = self.anim2 = None
         self.current_view = "charts"
         self.anim3_bars = []
+        self.anim_elasticity_scatters = []
         self.seasonal_coeffs = {}
 
         self.charts_frame = tk.Frame(root, bg="#f8f9fa")
@@ -1346,17 +1347,15 @@ class SalesAnalyzerApp:
 
         markers = ['o', 's', '^', 'D', 'v']
         colors = ['#3e7cb4', '#2c6c7e', '#3e55b4', '#1a414c', '#11442e']
-
         sizes = np.sqrt(df['Выручка']) * 2
 
-        scatter = None
-
+        scatter_objects = []
         legend_elements = []
+
         for idx, cat in enumerate(categories):
             cat_data = df[df['Категория'] == cat]
             if cat_data.empty:
                 continue
-
             marker = markers[idx % len(markers)]
             color = colors[idx % len(colors)]
 
@@ -1366,16 +1365,22 @@ class SalesAnalyzerApp:
                 c=cat_data['Скидки'],
                 s=sizes[cat_data.index],
                 cmap='coolwarm',
-                alpha=0.7,
+                alpha=0.0,
                 edgecolors=color,
                 linewidth=1.2,
-                marker=marker
+                marker=marker,
+                label=cat
             )
-
+            scatter_objects.append(scatter)
             legend_elements.append(
                 Line2D([0], [0], marker=marker, color='w', label=cat,
                        markerfacecolor=color, markersize=8, linestyle='None')
             )
+
+        self.ax_elasticity.set_xlabel('Цена со скидкой (₽)', fontsize=11)
+        self.ax_elasticity.set_ylabel('Спрос (шт)', fontsize=11)
+        self.ax_elasticity.set_title('Ценовая эластичность и эффективность скидок', fontsize=13, fontweight='bold')
+        self.ax_elasticity.grid(True, linestyle='--', alpha=0.5)
 
         legend = self.ax_elasticity.legend(
             handles=legend_elements,
@@ -1391,27 +1396,36 @@ class SalesAnalyzerApp:
             legend_bg = "#3a3f4b"
             legend_edge = "#555"
             legend_text = "white"
+            bg = "#1e1e1e"
+            fg = "white"
         else:
             legend_bg = "white"
             legend_edge = "lightgray"
             legend_text = "#2c3e50"
+            bg = "white"
+            fg = "#2c3e50"
 
         legend.get_frame().set_facecolor(legend_bg)
         legend.get_frame().set_edgecolor(legend_edge)
         for text in legend.get_texts():
             text.set_color(legend_text)
 
-        self.ax_elasticity.set_xlabel('Цена со скидкой (₽)', fontsize=11)
-        self.ax_elasticity.set_ylabel('Спрос (шт)', fontsize=11)
-        self.ax_elasticity.set_title('Ценовая эластичность и эффективность скидок', fontsize=13, fontweight='bold')
-        self.ax_elasticity.grid(True, linestyle='--', alpha=0.5)
+        if categories:
+            all_discounts = df[df['Категория'].isin(categories)]['Скидки']
+            if not all_discounts.empty:
+                from matplotlib.cm import ScalarMappable
+                from matplotlib.colors import Normalize
 
-        if 'scatter' in locals():
-            cbar = plt.colorbar(scatter, ax=self.ax_elasticity)
-            cbar.set_label('Скидка (%)', fontsize=10)
+                norm = Normalize(vmin=all_discounts.min(), vmax=all_discounts.max())
+                sm = ScalarMappable(cmap='coolwarm', norm=norm)
+                sm.set_array([])
 
-        bg = "#1e1e1e" if self.dark_theme else "white"
-        fg = "white" if self.dark_theme else "#2c3e50"
+                cbar = plt.colorbar(sm, ax=self.ax_elasticity)
+                cbar.set_label('Скидка (%)', fontsize=10)
+                cbar.ax.yaxis.set_tick_params(color=fg)
+                cbar.outline.set_edgecolor(fg)
+                plt.setp(cbar.ax.get_yticklabels(), color=fg)
+
         self.fig_elasticity.patch.set_facecolor(bg)
         self.ax_elasticity.set_facecolor(bg)
         self.ax_elasticity.tick_params(colors=fg)
@@ -1422,7 +1436,22 @@ class SalesAnalyzerApp:
             spine.set_color(fg)
 
         self.fig_elasticity.subplots_adjust(bottom=0.37)
+        self.anim_elasticity_scatters = scatter_objects
         self.canvas_elasticity.draw()
+
+        steps = 10
+        delay = 60
+        final_alpha = 0.7
+
+        def animate_step(step):
+            alpha = (step / steps) * final_alpha
+            for scatter in self.anim_elasticity_scatters:
+                scatter.set_alpha(alpha)
+            self.canvas_elasticity.draw_idle()
+            if step < steps:
+                self.root.after(delay, animate_step, step + 1)
+
+        self.root.after(100, animate_step, 1)
 
         recommendations = self._generate_elasticity_recommendations()
         self.elasticity_text_widget.config(state=tk.NORMAL)
@@ -1431,13 +1460,19 @@ class SalesAnalyzerApp:
         self.elasticity_text_widget.config(state=tk.DISABLED)
 
         stats = []
-        if hasattr(self, 'price_elasticity'):
-            avg_el = np.mean(list(self.price_elasticity.values()))
-            stats.append(f"Средняя эластичность: {avg_el:.2f}")
-        if hasattr(self, 'discount_effect'):
-            avg_rev_lift = np.mean([v[1] for v in self.discount_effect.values()])
-            stats.append(f"Средний эффект скидок: {avg_rev_lift:+.1f}%")
-        self.elasticity_stats_label.config(text=" • ".join(stats))
+        if hasattr(self, 'price_elasticity') and self.price_elasticity:
+            el_values = [v for v in self.price_elasticity.values() if np.isfinite(v)]
+            if el_values:
+                avg_el = np.mean(el_values)
+                stats.append(f"Средняя эластичность: {avg_el:.2f}")
+
+        if hasattr(self, 'discount_effect') and self.discount_effect:
+            rev_lifts = [v[1] for v in self.discount_effect.values() if np.isfinite(v[1])]
+            if rev_lifts:
+                avg_rev_lift = np.mean(rev_lifts)
+                stats.append(f"Средний эффект скидок: {avg_rev_lift:+.1f}%")
+
+        self.elasticity_stats_label.config(text=" • ".join(stats) if stats else "Нет данных для агрегации")
 
     def _draw_seasonality_graph(self):
         if self.df_full is None or self.df_full.empty:
