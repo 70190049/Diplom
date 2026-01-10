@@ -189,7 +189,7 @@ class SalesAnalyzerApp:
         self.elasticity_btn = tk.Button(
             self.center_container, text="Эластичность",
             command=self.show_elasticity,
-            bg="#27ae60", fg="white", font=("Arial", 10), padx=10
+            bg="#127d87", fg="white", font=("Arial", 10, "bold"), padx=10
         )
         self.elasticity_btn.pack(side=tk.LEFT, padx=5)
         self.elasticity_btn.config(state="disabled")
@@ -342,7 +342,7 @@ class SalesAnalyzerApp:
 
         self.back_from_elasticity_btn = tk.Button(
             self.elasticity_top_frame,
-            text="← Назад к графикам",
+            text="Назад к графикам",
             command=self.show_charts,
             bg="#2c3e50",
             fg="white",
@@ -1280,21 +1280,21 @@ class SalesAnalyzerApp:
         else:
             categories = self.selected_categories
 
+        markers = ['o', 's', '^', 'D', 'v']
+        colors = ['#3e7cb4', '#2c6c7e', '#3e55b4', '#1a414c', '#11442e']
+
         sizes = np.sqrt(df['Выручка']) * 2
 
         scatter = None
 
+        legend_elements = []
         for idx, cat in enumerate(categories):
             cat_data = df[df['Категория'] == cat]
             if cat_data.empty:
                 continue
 
-            try:
-                color_map = plt.colormaps.get_cmap('viridis')
-            except AttributeError:
-                color_map = plt.cm.get_cmap('viridis')
-
-            color = color_map(idx / max(1, len(categories) - 1))
+            marker = markers[idx % len(markers)]
+            color = colors[idx % len(colors)]
 
             scatter = self.ax_elasticity.scatter(
                 cat_data['Цена со скидкой'],
@@ -1303,18 +1303,23 @@ class SalesAnalyzerApp:
                 s=sizes[cat_data.index],
                 cmap='coolwarm',
                 alpha=0.7,
-                label=cat,
-                edgecolors='k',
-                linewidth=0.5
+                edgecolors=color,
+                linewidth=1.2,
+                marker=marker
+            )
+
+            legend_elements.append(
+                Line2D([0], [0], marker=marker, color='w', label=cat,
+                       markerfacecolor=color, markersize=8, linestyle='None')
             )
 
         self.ax_elasticity.set_xlabel('Цена со скидкой (₽)', fontsize=11)
         self.ax_elasticity.set_ylabel('Спрос (шт)', fontsize=11)
         self.ax_elasticity.set_title('Ценовая эластичность и эффективность скидок', fontsize=13, fontweight='bold')
         self.ax_elasticity.grid(True, linestyle='--', alpha=0.5)
-        self.ax_elasticity.legend()
+        self.ax_elasticity.legend(handles=legend_elements, loc='upper right', fontsize=9)
 
-        if scatter is not None:
+        if 'scatter' in locals():
             cbar = plt.colorbar(scatter, ax=self.ax_elasticity)
             cbar.set_label('Скидка (%)', fontsize=10)
 
