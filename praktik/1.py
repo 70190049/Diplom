@@ -368,7 +368,7 @@ class SalesAnalyzerApp:
         self.elasticity_graph_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
 
         self.elasticity_text_frame = tk.Frame(self.elasticity_content_frame, bg="#f8f9fa", width=750, height=100)
-        self.elasticity_text_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=(10, 20), pady=(0, 180))
+        self.elasticity_text_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=(10, 20), pady=(0, 160))
         self.elasticity_text_frame.pack_propagate(False)
 
         elasticity_rec_title = tk.Label(
@@ -1381,11 +1381,34 @@ class SalesAnalyzerApp:
                        markerfacecolor=color, markersize=8, linestyle='None')
             )
 
+        legend = self.ax_elasticity.legend(
+            handles=legend_elements,
+            loc='upper left',
+            bbox_to_anchor=(0.0, -0.27),
+            fontsize=8,
+            ncol=1 if len(legend_elements) < 5 else 2,
+            frameon=True
+        )
+        legend.get_frame().set_alpha(0.9)
+
+        if self.dark_theme:
+            legend_bg = "#3a3f4b"
+            legend_edge = "#555"
+            legend_text = "white"
+        else:
+            legend_bg = "white"
+            legend_edge = "lightgray"
+            legend_text = "#2c3e50"
+
+        legend.get_frame().set_facecolor(legend_bg)
+        legend.get_frame().set_edgecolor(legend_edge)
+        for text in legend.get_texts():
+            text.set_color(legend_text)
+
         self.ax_elasticity.set_xlabel('Цена со скидкой (₽)', fontsize=11)
         self.ax_elasticity.set_ylabel('Спрос (шт)', fontsize=11)
         self.ax_elasticity.set_title('Ценовая эластичность и эффективность скидок', fontsize=13, fontweight='bold')
         self.ax_elasticity.grid(True, linestyle='--', alpha=0.5)
-        self.ax_elasticity.legend(handles=legend_elements, loc='upper right', fontsize=9)
 
         if 'scatter' in locals():
             cbar = plt.colorbar(scatter, ax=self.ax_elasticity)
@@ -1402,6 +1425,7 @@ class SalesAnalyzerApp:
         for spine in self.ax_elasticity.spines.values():
             spine.set_color(fg)
 
+        self.fig_elasticity.subplots_adjust(bottom=0.37)
         self.canvas_elasticity.draw()
 
         recommendations = self._generate_elasticity_recommendations()
