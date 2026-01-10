@@ -186,6 +186,14 @@ class SalesAnalyzerApp:
         self.seasonality_btn.pack(side=tk.LEFT, padx=5)
         self.seasonality_btn.config(state="disabled")
 
+        self.elasticity_btn = tk.Button(
+            self.center_container, text="Эластичность",
+            command=self.show_elasticity,
+            bg="#27ae60", fg="white", font=("Arial", 10), padx=10
+        )
+        self.elasticity_btn.pack(side=tk.LEFT, padx=5)
+        self.elasticity_btn.config(state="disabled")
+
         cat_frame = tk.Frame(self.control_frame, bg="#f8f9fa", pady=5)
         cat_frame.pack(expand=True)
 
@@ -327,6 +335,35 @@ class SalesAnalyzerApp:
         self.fig3, self.ax3 = plt.subplots(figsize=(9.5, 4.3))
         self.canvas3 = FigureCanvasTkAgg(self.fig3, self.seasonality_graph_frame)
         self.canvas3.get_tk_widget().pack(side=tk.LEFT, padx=5, pady=5, anchor="nw")
+
+        self.elasticity_frame = tk.Frame(root, bg="#f8f9fa")
+        self.elasticity_top_frame = tk.Frame(self.elasticity_frame, bg="#f8f9fa")
+        self.elasticity_top_frame.pack(fill=tk.X, padx=10, pady=(10, 0))
+
+        self.back_from_elasticity_btn = tk.Button(
+            self.elasticity_top_frame,
+            text="← Назад к графикам",
+            command=self.show_charts,
+            bg="#2c3e50",
+            fg="white",
+            font=("Arial", 10, "bold"),
+            padx=15,
+            pady=5
+        )
+        self.back_from_elasticity_btn.pack(side=tk.RIGHT)
+
+        elasticity_title = tk.Label(
+            self.elasticity_top_frame,
+            text="Ценовая эластичность и скидки",
+            font=("Arial", 14, "bold"),
+            fg="#1a5276",
+            bg="#f8f9fa"
+        )
+        elasticity_title.pack(side=tk.LEFT, padx=10)
+
+        self.fig_elasticity, self.ax_elasticity = plt.subplots(figsize=(6.5, 4.8))
+        self.canvas_elasticity = FigureCanvasTkAgg(self.fig_elasticity, self.elasticity_frame)
+        self.canvas_elasticity.get_tk_widget().pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
     def toggle_theme(self):
         self.dark_theme = not self.dark_theme
@@ -787,11 +824,13 @@ class SalesAnalyzerApp:
             self.apply_cat_btn.config(state="disabled")
             self.cat_listbox.config(state="disabled")
             self.export_btn.config(state="disabled")
+            self.elasticity_btn.config(state="disabled")
         else:
             self.load_btn.config(state="normal", text="Запустить анализ")
             self.browse_btn.config(state="normal")
             self.apply_cat_btn.config(state="normal")
             self.cat_listbox.config(state="normal")
+            self.elasticity_btn.config(state="normal" if self.df_full is not None else "disabled")
 
     def _calculate_yearly_comparison(self, df):
         if df.empty or 'Дата' not in df.columns:
@@ -1197,14 +1236,92 @@ class SalesAnalyzerApp:
         else:
             self._draw_seasonality_graph()
 
+    def show_elasticity(self):
+        self.charts_frame.pack_forget()
+        self.stats_frame.pack_forget()
+        self.elasticity_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        self._draw_elasticity_graph()
+
     def show_charts(self):
         self.current_view = "charts"
         self.seasonality_frame.pack_forget()
+        self.elasticity_frame.pack_forget()
         self.charts_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         self.stats_frame.pack(fill=tk.X, padx=20, pady=(0, 10))
 
         if self.df_full is not None and not self.df_full.empty:
             self._draw_animation(self.selected_categories)
+
+    def _draw_elasticity_graph(self):
+        if self.df_full is None or self.df_full.empty:
+            self.ax_elasticity.clear()
+            self.ax_elasticity.text(0.5, 0.5, "Нет данных", ha='center', va='center', fontsize=14, color='gray')
+            self.canvas_elasticity.draw()
+            return
+
+        self.fig_elasticity.clear()
+        self.ax_elasticity = self.fig_elasticity.add_subplot(111)
+
+        df = self.df_full.copy()
+        df['Скидки'] = pd.to_numeric(df['Скидки'], errors='coerce').fillna(0)
+        df['Цена со скидкой'] = df['Цена за шт'] * (1 - df['Скидки'] / 100)
+        df['Выручка'] = df['Цена со скидкой'] * df['Количество продаж']
+
+        if "Все категории" in self.selected_categories:
+            categories = df['Категория'].dropna().unique()[:5]
+        else:
+            categories = self.selected_categories
+
+        sizes = np.sqrt(df['Выручка']) * 2
+
+        scatter = None
+
+        for idx, cat in enumerate(categories):
+            cat_data = df[df['Категория'] == cat]
+            if cat_data.empty:
+                continue
+
+            try:
+                color_map = plt.colormaps.get_cmap('viridis')
+            except AttributeError:
+                color_map = plt.cm.get_cmap('viridis')
+
+            color = color_map(idx / max(1, len(categories) - 1))
+
+            scatter = self.ax_elasticity.scatter(
+                cat_data['Цена со скидкой'],
+                cat_data['Количество продаж'],
+                c=cat_data['Скидки'],
+                s=sizes[cat_data.index],
+                cmap='coolwarm',
+                alpha=0.7,
+                label=cat,
+                edgecolors='k',
+                linewidth=0.5
+            )
+
+        self.ax_elasticity.set_xlabel('Цена со скидкой (₽)', fontsize=11)
+        self.ax_elasticity.set_ylabel('Спрос (шт)', fontsize=11)
+        self.ax_elasticity.set_title('Ценовая эластичность и эффективность скидок', fontsize=13, fontweight='bold')
+        self.ax_elasticity.grid(True, linestyle='--', alpha=0.5)
+        self.ax_elasticity.legend()
+
+        if scatter is not None:
+            cbar = plt.colorbar(scatter, ax=self.ax_elasticity)
+            cbar.set_label('Скидка (%)', fontsize=10)
+
+        bg = "#1e1e1e" if self.dark_theme else "white"
+        fg = "white" if self.dark_theme else "#2c3e50"
+        self.fig_elasticity.patch.set_facecolor(bg)
+        self.ax_elasticity.set_facecolor(bg)
+        self.ax_elasticity.tick_params(colors=fg)
+        self.ax_elasticity.xaxis.label.set_color(fg)
+        self.ax_elasticity.yaxis.label.set_color(fg)
+        self.ax_elasticity.title.set_color(fg)
+        for spine in self.ax_elasticity.spines.values():
+            spine.set_color(fg)
+
+        self.canvas_elasticity.draw()
 
     def _draw_seasonality_graph(self):
         if self.df_full is None or self.df_full.empty:
@@ -1330,46 +1447,6 @@ class SalesAnalyzerApp:
 
         steps = 10
         delay = 60
-
-        def animate_step(step):
-            alpha = step / steps
-            for rect in self.anim3_bars:
-                rect.set_alpha(alpha)
-            self.canvas3.draw_idle()
-            if step < steps:
-                self.root.after(delay, animate_step, step + 1)
-
-        self.root.after(100, animate_step, 1)
-
-        def animate_step(step):
-            alpha = step / steps
-            for rect in self.anim3_bars:
-                rect.set_alpha(alpha)
-            self.canvas3.draw_idle()
-            if step < steps:
-                self.root.after(delay, animate_step, step + 1)
-
-        self.root.after(100, animate_step, 1)
-
-        def animate_step(step):
-            alpha = step / steps
-            for rect in self.anim3_bars:
-                rect.set_alpha(alpha)
-            self.canvas3.draw_idle()
-            if step < steps:
-                self.root.after(delay, animate_step, step + 1)
-
-        self.root.after(100, animate_step, 1)
-
-        def animate_step(step):
-            alpha = step / steps
-            for rect in self.anim3_bars:
-                rect.set_alpha(alpha)
-            self.canvas3.draw_idle()
-            if step < steps:
-                self.root.after(delay, animate_step, step + 1)
-
-        self.root.after(100, animate_step, 1)
 
         def animate_step(step):
             alpha = step / steps
