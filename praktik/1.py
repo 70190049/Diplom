@@ -455,7 +455,7 @@ class SalesAnalyzerApp:
         self.export_btn.config(bg="#218359" if not self.dark_theme else "#1a5276", fg="white")
         self.export_plot_btn.config(bg="#21837a" if not self.dark_theme else "#1a5276", fg="white")
         self.seasonality_btn.config(bg="#2f7f99" if not self.dark_theme else "#1a5276", fg="white")
-        self.back_from_seasonality_btn.config(bg="#2c3e50", fg="white")
+        self.elasticity_btn.config(bg="#2f7f99" if not self.dark_theme else "#1a5276", fg="white")
 
         for widget in self.seasonality_top_frame.winfo_children():
             if isinstance(widget, tk.Label):
@@ -519,6 +519,52 @@ class SalesAnalyzerApp:
                     text.set_color(fg_color)
 
             self.canvas3.draw()
+
+            if hasattr(self, 'elasticity_frame'):
+                self.elasticity_frame.config(bg=bg_color)
+                self.elasticity_top_frame.config(bg=bg_color)
+                self.elasticity_content_frame.config(bg=bg_color)
+                self.elasticity_graph_frame.config(bg=bg_color)
+                self.elasticity_text_frame.config(bg=bg_color)
+                if hasattr(self, 'elasticity_bottom_frame'):
+                    self.elasticity_bottom_frame.config(bg=bg_color)
+
+                for widget in self.elasticity_top_frame.winfo_children():
+                    if isinstance(widget, tk.Label):
+                        widget.config(bg=bg_color, fg=fg_color)
+
+                if hasattr(self, 'back_from_elasticity_btn'):
+                    self.back_from_elasticity_btn.config(bg="#2c3e50", fg="white")
+
+                for widget in self.elasticity_text_frame.winfo_children():
+                    if isinstance(widget, tk.Label) and widget.cget("text") == "Рекомендации":
+                        widget.config(bg=bg_color, fg=fg_color)
+
+                if hasattr(self, 'elasticity_text_widget'):
+                    self.elasticity_text_widget.config(
+                        bg=text_bg,
+                        fg=text_fg,
+                        insertbackground=text_fg
+                    )
+
+                if hasattr(self, 'elasticity_stats_label'):
+                    self.elasticity_stats_label.config(bg=bg_color, fg=stats_fg)
+
+            if hasattr(self, 'fig_elasticity') and self.fig_elasticity:
+                if self.df_full is not None and not self.df_full.empty:
+                    self._draw_elasticity_graph()
+                else:
+                    self.ax_elasticity.clear()
+                    self.ax_elasticity.text(0.5, 0.5, "Нет данных", ha='center', va='center', fontsize=14,
+                                            color='white' if self.dark_theme else 'gray')
+
+                if hasattr(self, '_elasticity_colorbar') and self._elasticity_colorbar:
+                    self._elasticity_colorbar.ax.yaxis.set_tick_params(color=fg_color)
+                    self._elasticity_colorbar.outline.set_edgecolor(fg_color)
+                    plt.setp(self._elasticity_colorbar.ax.get_yticklabels(), color=fg_color)
+                    self._elasticity_colorbar.ax.yaxis.label.set_color(fg_color)
+
+                self.canvas_elasticity.draw()
 
         self.canvas1.draw()
         self.canvas2.draw()
@@ -1425,9 +1471,11 @@ class SalesAnalyzerApp:
 
                 cbar = plt.colorbar(sm, ax=self.ax_elasticity)
                 cbar.set_label('Скидка (%)', fontsize=10)
+                self._elasticity_colorbar = cbar
                 cbar.ax.yaxis.set_tick_params(color=fg)
                 cbar.outline.set_edgecolor(fg)
                 plt.setp(cbar.ax.get_yticklabels(), color=fg)
+                cbar.ax.yaxis.label.set_color(fg)
 
         self.fig_elasticity.patch.set_facecolor(bg)
         self.ax_elasticity.set_facecolor(bg)
