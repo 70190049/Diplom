@@ -805,6 +805,8 @@ class SalesAnalyzerApp:
 
             if self.current_view == "seasonality":
                 self._draw_seasonality_graph()
+            elif self.current_view == "elasticity":
+                self._draw_elasticity_graph()
             else:
                 self._draw_animation(categories)
 
@@ -1294,6 +1296,7 @@ class SalesAnalyzerApp:
             self._draw_seasonality_graph()
 
     def show_elasticity(self):
+        self.current_view = "elasticity"
         self.charts_frame.pack_forget()
         self.seasonality_frame.pack_forget()
         self.stats_frame.pack_forget()
