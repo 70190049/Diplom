@@ -390,6 +390,18 @@ class SalesAnalyzerApp:
         )
         self.elasticity_text_widget.pack(fill=tk.BOTH, expand=True)
 
+        self.elasticity_bottom_frame = tk.Frame(self.elasticity_frame, bg="#f8f9fa")
+        self.elasticity_bottom_frame.pack(fill=tk.X, padx=20)
+        self.elasticity_stats_label = tk.Label(
+            self.elasticity_bottom_frame,
+            text="",
+            font=("Arial", 11),
+            fg="#2c3e50",
+            bg="#f8f9fa",
+            justify=tk.LEFT
+        )
+        self.elasticity_stats_label.pack(side=tk.LEFT)
+
         self.fig_elasticity, self.ax_elasticity = plt.subplots(figsize=(9.5, 4.3))
         self.canvas_elasticity = FigureCanvasTkAgg(self.fig_elasticity, self.elasticity_graph_frame)
         self.canvas_elasticity.get_tk_widget().pack(side=tk.LEFT, padx=5, pady=5, anchor="nw")
@@ -1397,6 +1409,15 @@ class SalesAnalyzerApp:
         self.elasticity_text_widget.delete(1.0, tk.END)
         self.elasticity_text_widget.insert(tk.END, recommendations)
         self.elasticity_text_widget.config(state=tk.DISABLED)
+
+        stats = []
+        if hasattr(self, 'price_elasticity'):
+            avg_el = np.mean(list(self.price_elasticity.values()))
+            stats.append(f"Средняя эластичность: {avg_el:.2f}")
+        if hasattr(self, 'discount_effect'):
+            avg_rev_lift = np.mean([v[1] for v in self.discount_effect.values()])
+            stats.append(f"Средний эффект скидок: {avg_rev_lift:+.1f}%")
+        self.elasticity_stats_label.config(text=" • ".join(stats))
 
     def _draw_seasonality_graph(self):
         if self.df_full is None or self.df_full.empty:
