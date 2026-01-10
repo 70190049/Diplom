@@ -111,6 +111,7 @@ class SalesAnalyzerApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Анализатор продаж")
+        self.root.resizable(False, False)
         self.root.geometry("1630x715")
         self.root.configure(bg="#f8f9fa")
         self.root.protocol("WM_DELETE_WINDOW", self._on_closing)
@@ -1883,6 +1884,56 @@ class SalesAnalyzerApp:
 
     def export_plots(self):
         try:
+            dialog = tk.Toplevel(self.root)
+            dialog.title("Выберите графики для сохранения")
+            dialog.geometry("300x200")
+            dialog.resizable(False, False)
+            dialog.transient(self.root)
+            dialog.grab_set()
+            dialog.update_idletasks()
+            x = self.root.winfo_x() + (self.root.winfo_width() // 2) - (dialog.winfo_width() // 2)
+            y = self.root.winfo_y() + (self.root.winfo_height() // 2) - (dialog.winfo_height() // 2)
+            dialog.geometry(f"+{x}+{y}")
+
+            tk.Label(dialog, text="Выберите графики:", font=("Arial", 11)).pack(pady=10)
+
+            var1 = tk.BooleanVar(value=True)
+            var2 = tk.BooleanVar(value=True)
+            var3 = tk.BooleanVar(value=True)
+            var4 = tk.BooleanVar(value=True)
+
+            cb1 = tk.Checkbutton(dialog, text="Факт и оценка", variable=var1)
+            cb2 = tk.Checkbutton(dialog, text="Прогноз 2026", variable=var2)
+            cb3 = tk.Checkbutton(dialog, text="Сезонность", variable=var3)
+            cb4 = tk.Checkbutton(dialog, text="Эластичность", variable=var4)
+
+            for cb in (cb1, cb2, cb3, cb4):
+                cb.pack(anchor="w", padx=30, pady=2)
+
+            selected = []
+
+            def on_ok():
+                selected.extend([
+                    ("факт_и_оценка", var1.get()),
+                    ("прогноз_2026", var2.get()),
+                    ("сезонность", var3.get()),
+                    ("эластичность", var4.get())
+                ])
+                dialog.destroy()
+
+            def on_cancel():
+                dialog.destroy()
+
+            btn_frame = tk.Frame(dialog)
+            btn_frame.pack(pady=10)
+            tk.Button(btn_frame, text="OK", command=on_ok, width=10).pack(side=tk.LEFT, padx=5)
+            tk.Button(btn_frame, text="Отмена", command=on_cancel, width=10).pack(side=tk.LEFT, padx=5)
+
+            self.root.wait_window(dialog)
+
+            if not any(v for _, v in selected):
+                return
+
             cat_name = "графики"
             if "Все категории" not in self.selected_categories:
                 cat_name = "_".join(self.selected_categories[:2])
@@ -1895,22 +1946,28 @@ class SalesAnalyzerApp:
             if not path:
                 return
 
-            base = os.path.splitext(path)[0]
-            path1 = f"{base}_факт_и_оценка.png"
-            path2 = f"{base}_прогноз_2026.png"
-            path3 = f"{base}_сезонность.png"
-            path4 = f"{base}_эластичность.png"
+            base, ext = os.path.splitext(path)
 
-            self.fig1.savefig(path1, dpi=150, bbox_inches='tight')
-            self.fig2.savefig(path2, dpi=150, bbox_inches='tight')
-            self.fig3.savefig(path3, dpi=150, bbox_inches='tight')
-            self.fig_elasticity.savefig(path4, dpi=150, bbox_inches='tight')
+            saved_files = []
+            if var1.get():
+                p = f"{base}_факт_и_оценка{ext}"
+                self.fig1.savefig(p, dpi=150, bbox_inches='tight')
+                saved_files.append(os.path.basename(p))
+            if var2.get():
+                p = f"{base}_прогноз_2026{ext}"
+                self.fig2.savefig(p, dpi=150, bbox_inches='tight')
+                saved_files.append(os.path.basename(p))
+            if var3.get():
+                p = f"{base}_сезонность{ext}"
+                self.fig3.savefig(p, dpi=150, bbox_inches='tight')
+                saved_files.append(os.path.basename(p))
+            if var4.get():
+                p = f"{base}_эластичность{ext}"
+                self.fig_elasticity.savefig(p, dpi=150, bbox_inches='tight')
+                saved_files.append(os.path.basename(p))
 
-            messagebox.showinfo("Готово", f"Сохранено:\n"
-                                          f"{os.path.basename(path1)}\n"
-                                          f"{os.path.basename(path2)}\n"
-                                          f"{os.path.basename(path3)}\n"
-                                          f"{os.path.basename(path4)}")
+            messagebox.showinfo("Готово", f"Сохранено:\n" + "\n".join(saved_files))
+
         except Exception as e:
             messagebox.showerror("Ошибка", f"Не удалось сохранить графики:\n{e}")
 
