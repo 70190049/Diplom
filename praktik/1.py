@@ -1851,15 +1851,18 @@ class SalesAnalyzerApp:
             path1 = f"{base}_факт_и_оценка.png"
             path2 = f"{base}_прогноз_2026.png"
             path3 = f"{base}_сезонность.png"
+            path4 = f"{base}_эластичность.png"
 
             self.fig1.savefig(path1, dpi=150, bbox_inches='tight')
             self.fig2.savefig(path2, dpi=150, bbox_inches='tight')
             self.fig3.savefig(path3, dpi=150, bbox_inches='tight')
+            self.fig_elasticity.savefig(path4, dpi=150, bbox_inches='tight')
 
             messagebox.showinfo("Готово", f"Сохранено:\n"
                                           f"{os.path.basename(path1)}\n"
                                           f"{os.path.basename(path2)}\n"
-                                          f"{os.path.basename(path3)}")
+                                          f"{os.path.basename(path3)}\n"
+                                          f"{os.path.basename(path4)}")
         except Exception as e:
             messagebox.showerror("Ошибка", f"Не удалось сохранить графики:\n{e}")
 
