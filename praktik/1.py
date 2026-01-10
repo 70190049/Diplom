@@ -936,20 +936,16 @@ class SalesAnalyzerApp:
     def _calculate_price_elasticity_and_discount_effect(self, df):
         if df.empty or 'Скидки' not in df.columns:
             return {}, {}, ""
-
         df = df.copy()
         df['Скидки'] = pd.to_numeric(df['Скидки'], errors='coerce').fillna(0)
         df['Цена со скидкой'] = df['Цена за шт'] * (1 - df['Скидки'] / 100)
-
         elasticity = {}
         discount_effect = {}
         insights = []
-
         for cat in df['Категория'].dropna().unique():
             cat_df = df[df['Категория'] == cat]
             if len(cat_df) < 10:
                 continue
-
             cat_df = cat_df.sort_values('Дата')
             cat_df['price_pct'] = cat_df['Цена за шт'].pct_change()
             cat_df['qty_pct'] = cat_df['Количество продаж'].pct_change()
@@ -1268,7 +1264,19 @@ class SalesAnalyzerApp:
         df['Выручка'] = df['Цена со скидкой'] * df['Количество продаж']
 
         if "Все категории" in self.selected_categories:
-            categories = df['Категория'].dropna().unique()[:5]
+            categories = [
+                cat for cat, el in self.price_elasticity.items()
+                if abs(el) > 1.0
+            ]
+            if not categories:
+                self.ax_elasticity.clear()
+                self.ax_elasticity.text(
+                    0.5, 0.5,
+                    "Нет категорий с сильной ценовой эластичностью\n(|эластичность| ≤ 1.0 для всех)",
+                    ha='center', va='center', fontsize=14, color='gray'
+                )
+                self.canvas_elasticity.draw()
+                return
         else:
             categories = self.selected_categories
 
