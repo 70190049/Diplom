@@ -361,9 +361,38 @@ class SalesAnalyzerApp:
         )
         elasticity_title.pack(side=tk.LEFT, padx=10)
 
-        self.fig_elasticity, self.ax_elasticity = plt.subplots(figsize=(6.5, 4.8))
-        self.canvas_elasticity = FigureCanvasTkAgg(self.fig_elasticity, self.elasticity_frame)
-        self.canvas_elasticity.get_tk_widget().pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        self.elasticity_content_frame = tk.Frame(self.elasticity_frame, bg="#f8f9fa")
+        self.elasticity_content_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        self.elasticity_graph_frame = tk.Frame(self.elasticity_content_frame, bg="#f8f9fa")
+        self.elasticity_graph_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
+
+        self.elasticity_text_frame = tk.Frame(self.elasticity_content_frame, bg="#f8f9fa", width=750, height=100)
+        self.elasticity_text_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=(10, 20), pady=(0, 180))
+        self.elasticity_text_frame.pack_propagate(False)
+
+        elasticity_rec_title = tk.Label(
+            self.elasticity_text_frame,
+            text="Рекомендации",
+            font=("Arial", 12, "bold"),
+            fg="#1a5276",
+            bg="#f8f9fa"
+        )
+        elasticity_rec_title.pack(side=tk.TOP, anchor="w", padx=10, pady=(10, 5))
+
+        self.elasticity_text_widget = tk.Text(
+            self.elasticity_text_frame,
+            wrap=tk.WORD,
+            font=("Arial", 10),
+            padx=10,
+            pady=10,
+            state=tk.DISABLED
+        )
+        self.elasticity_text_widget.pack(fill=tk.BOTH, expand=True)
+
+        self.fig_elasticity, self.ax_elasticity = plt.subplots(figsize=(9.5, 4.3))
+        self.canvas_elasticity = FigureCanvasTkAgg(self.fig_elasticity, self.elasticity_graph_frame)
+        self.canvas_elasticity.get_tk_widget().pack(side=tk.LEFT, padx=5, pady=5, anchor="nw")
 
     def toggle_theme(self):
         self.dark_theme = not self.dark_theme
@@ -979,6 +1008,33 @@ class SalesAnalyzerApp:
 
         return elasticity, discount_effect, insight_str
 
+    def _generate_elasticity_recommendations(self):
+        if not hasattr(self, 'price_elasticity') or not self.price_elasticity:
+            return "Недостаточно данных для анализа эластичности."
+
+        recs = []
+        for cat, el in self.price_elasticity.items():
+            if el < -1.5:
+                recs.append(f"• {cat}: высокая эластичность ({el:.2f}) → снижайте цены для роста выручки.")
+            elif -1.5 <= el < -1.0:
+                recs.append(f"• {cat}: умеренная эластичность ({el:.2f}) → осторожное ценообразование.")
+            elif -1.0 <= el <= -0.5:
+                recs.append(f"• {cat}: низкая эластичность ({el:.2f}) → можно повышать цены.")
+            elif el > -0.5:
+                recs.append(f"• {cat}: неэластичный спрос ({el:.2f}) → цены не влияют на объёмы.")
+
+        if not recs:
+            return "Эластичность не определена."
+
+        if hasattr(self, 'discount_effect'):
+            for cat, (delta_qty, delta_rev) in self.discount_effect.items():
+                if delta_rev > 5:
+                    recs.append(f"• Скидки для '{cat}' эффективны (+{delta_rev:.1f}% выручки).")
+                elif delta_rev < -3:
+                    recs.append(f"• Скидки для '{cat}' вредят выручке ({delta_rev:.1f}%). Пересмотрите условия.")
+
+        return "\n".join(recs)
+
     def _draw_animation(self, categories):
         for anim in [self.anim1, self.anim2]:
             if anim:
@@ -1335,6 +1391,12 @@ class SalesAnalyzerApp:
             spine.set_color(fg)
 
         self.canvas_elasticity.draw()
+
+        recommendations = self._generate_elasticity_recommendations()
+        self.elasticity_text_widget.config(state=tk.NORMAL)
+        self.elasticity_text_widget.delete(1.0, tk.END)
+        self.elasticity_text_widget.insert(tk.END, recommendations)
+        self.elasticity_text_widget.config(state=tk.DISABLED)
 
     def _draw_seasonality_graph(self):
         if self.df_full is None or self.df_full.empty:
