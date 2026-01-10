@@ -263,13 +263,9 @@ class SalesAnalyzerApp:
             self.seasonality_top_frame,
             text="Назад к графикам",
             command=self.show_charts,
-            bg="#2c3e50",
-            fg="white",
-            font=("Arial", 10, "bold"),
-            padx=15,
-            pady=5
+            bg="#2c3e50", fg="white", font=("Arial", 10, "bold"), padx=10, pady=5
         )
-        self.back_from_seasonality_btn.pack(side=tk.RIGHT)
+        self.back_from_seasonality_btn.pack(side=tk.RIGHT, padx=(5, 0))
 
         seasonality_title = tk.Label(
             self.seasonality_top_frame,
@@ -344,13 +340,9 @@ class SalesAnalyzerApp:
             self.elasticity_top_frame,
             text="Назад к графикам",
             command=self.show_charts,
-            bg="#2c3e50",
-            fg="white",
-            font=("Arial", 10, "bold"),
-            padx=15,
-            pady=5
+            bg="#2c3e50", fg="white", font=("Arial", 10, "bold"), padx=10, pady=5
         )
-        self.back_from_elasticity_btn.pack(side=tk.RIGHT)
+        self.back_from_elasticity_btn.pack(side=tk.RIGHT, padx=(5, 0))
 
         elasticity_title = tk.Label(
             self.elasticity_top_frame,
@@ -1290,9 +1282,9 @@ class SalesAnalyzerApp:
     def show_seasonality(self):
         self.current_view = "seasonality"
         self.charts_frame.pack_forget()
+        self.elasticity_frame.pack_forget()
         self.stats_frame.pack_forget()
         self.seasonality_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-
         if self.df_full is not None and not self.df_full.empty:
             seasonal_coeffs, _ = self._calculate_seasonality(self.df_full)
             self.seasonal_coeffs = seasonal_coeffs
@@ -1302,9 +1294,13 @@ class SalesAnalyzerApp:
 
     def show_elasticity(self):
         self.charts_frame.pack_forget()
+        self.seasonality_frame.pack_forget()
         self.stats_frame.pack_forget()
         self.elasticity_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-        self._draw_elasticity_graph()
+        if self.df_full is not None and not self.df_full.empty:
+            self._draw_elasticity_graph()
+        else:
+            self._draw_elasticity_graph()
 
     def show_charts(self):
         self.current_view = "charts"
