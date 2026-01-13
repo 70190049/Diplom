@@ -1329,6 +1329,94 @@ class SalesAnalyzerApp:
 
         self.root.after(100, animate_step, 1)
 
+        if hasattr(self, '_revenue_tooltip_handler'):
+            self.fig2.canvas.mpl_disconnect(self._revenue_tooltip_handler)
+
+        self._revenue_tooltip_data = []
+        month_labels = ["Янв", "Фев", "Мар", "Апр", "Май", "Июн",
+                        "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек"]
+
+        x_vals = np.arange(12)
+
+        if "Все категории" in categories or len(categories) == 1:
+            y = self.future_monthly['прогноз_выручка'].values[:12].astype(float)
+            if len(y) < 12:
+                y = np.pad(y, (0, 12 - len(y)), constant_values=(y[-1] if len(y) > 0 else 50000))
+            for i in range(12):
+                self._revenue_tooltip_data.append({
+                    'x': x_vals[i],
+                    'y': y[i],
+                    'category': 'Суммарно',
+                    'month': month_labels[i],
+                    'revenue': y[i]
+                })
+        else:
+            for i, cat in enumerate(categories):
+                if cat in self.future_by_cat and len(self.future_by_cat[cat]) >= 12:
+                    y = self.future_by_cat[cat][:12]
+                else:
+                    y = np.zeros(12)
+                for m in range(12):
+                    self._revenue_tooltip_data.append({
+                        'x': x_vals[m],
+                        'y': y[m],
+                        'category': cat,
+                        'month': month_labels[m],
+                        'revenue': y[m]
+                    })
+
+        self._revenue_tooltip_annot = self.ax2.annotate(
+            "", xy=(0, 0), xytext=(10, 10),
+            textcoords="offset points",
+            bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="black", alpha=0.9),
+            arrowprops=dict(arrowstyle="->", color="black"),
+            zorder=1000,
+            color="black"
+        )
+        self._revenue_tooltip_annot.set_visible(False)
+
+        def on_hover_revenue(event):
+            vis = self._revenue_tooltip_annot.get_visible()
+            if event.inaxes != self.ax2:
+                if vis:
+                    self._revenue_tooltip_annot.set_visible(False)
+                    self.canvas2.draw_idle()
+                return
+
+            found = False
+            for point in self._revenue_tooltip_data:
+                if abs(event.xdata - point['x']) < 0.4:
+                    xlim = self.ax2.get_xlim()
+                    ylim = self.ax2.get_ylim()
+                    x_range = xlim[1] - xlim[0]
+                    y_range = ylim[1] - ylim[0]
+
+                    offset_x, offset_y = 10, 10
+                    if point['x'] > xlim[1] - 0.2 * x_range:
+                        offset_x = -90
+                    if point['y'] > ylim[1] - 0.15 * y_range:
+                        offset_y = -30
+
+                    self._revenue_tooltip_annot.xy = (point['x'], point['y'])
+                    text = (
+                        f"Категория: {point['category']}\n"
+                        f"Месяц: {point['month']}\n"
+                        f"Выручка: {int(round(point['revenue'])):,} ₽".replace(',', ' ')
+                    )
+                    self._revenue_tooltip_annot.set_text(text)
+                    self._revenue_tooltip_annot.xyann = (offset_x, offset_y)
+                    self._revenue_tooltip_annot.set_visible(True)
+                    found = True
+                    break
+
+            if vis or found:
+                self._revenue_tooltip_annot.set_visible(found)
+                self.canvas2.draw_idle()
+
+        self._revenue_tooltip_handler = self.fig2.canvas.mpl_connect(
+            "motion_notify_event", lambda event: on_hover_revenue(event)
+        )
+
     def show_seasonality(self):
         self.current_view = "seasonality"
         self.charts_frame.pack_forget()
