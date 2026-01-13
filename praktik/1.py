@@ -1370,6 +1370,9 @@ class SalesAnalyzerApp:
             self.canvas_elasticity.draw()
             return
 
+        if hasattr(self, '_elasticity_tooltip_handler'):
+            self.fig_elasticity.canvas.mpl_disconnect(self._elasticity_tooltip_handler)
+
         self.fig_elasticity.clear()
         self.ax_elasticity = self.fig_elasticity.add_subplot(111)
 
@@ -1402,6 +1405,7 @@ class SalesAnalyzerApp:
         scatter_objects = []
         legend_elements = []
 
+        self._elasticity_tooltip_data = []
         for idx, cat in enumerate(categories):
             cat_data = df[df['Категория'] == cat]
             if cat_data.empty:
@@ -1422,6 +1426,18 @@ class SalesAnalyzerApp:
                 label=cat
             )
             scatter_objects.append(scatter)
+
+            for _, row in cat_data.iterrows():
+                self._elasticity_tooltip_data.append({
+                    'x': row['Цена со скидкой'],
+                    'y': row['Количество продаж'],
+                    'cat': row['Категория'],
+                    'price': row['Цена со скидкой'],
+                    'qty': row['Количество продаж'],
+                    'discount': row['Скидки'],
+                    'revenue': row['Выручка']
+                })
+
             legend_elements.append(
                 Line2D([0], [0], marker=marker, color='w', label=cat,
                        markerfacecolor=color, markersize=8, linestyle='None')
@@ -1490,6 +1506,63 @@ class SalesAnalyzerApp:
         self.fig_elasticity.subplots_adjust(bottom=0.37)
         self.anim_elasticity_scatters = scatter_objects
         self.canvas_elasticity.draw()
+
+        self._tooltip_annotation = self.ax_elasticity.annotate(
+            "", xy=(0, 0), xytext=(10, 10),
+            textcoords="offset points",
+            bbox=dict(boxstyle="round,pad=0.3", fc="white", alpha=0.9),
+            arrowprops=dict(arrowstyle="->"),
+            zorder=1000
+        )
+        self._tooltip_annotation.set_visible(False)
+
+        def on_hover(event):
+            vis = self._tooltip_annotation.get_visible()
+            if event.inaxes != self.ax_elasticity:
+                if vis:
+                    self._tooltip_annotation.set_visible(False)
+                    self.canvas_elasticity.draw_idle()
+                return
+
+            found = False
+            for point in self._elasticity_tooltip_data:
+                dx = event.xdata - point['x']
+                dy = event.ydata - point['y']
+                dist = np.hypot(dx, dy)
+                if dist < 5:
+                    xlim = self.ax_elasticity.get_xlim()
+                    ylim = self.ax_elasticity.get_ylim()
+                    offset_x, offset_y = 10, 10
+                    if point['x'] > xlim[1] * 0.7:
+                        offset_x = -120
+                    elif point['x'] < xlim[0] * 1.2:
+                        offset_x = 60
+                    if point['y'] > ylim[1] * 0.8:
+                        offset_y = -60
+                    elif point['y'] < ylim[0] * 1.2:
+                        offset_y = 40
+
+                    self._tooltip_annotation.xy = (point['x'], point['y'])
+                    self._tooltip_annotation.set_position((offset_x, offset_y))
+                    text = (
+                        f"Категория: {point['cat']}\n"
+                        f"Цена: {point['price']:.0f} ₽\n"
+                        f"Спрос: {point['qty']:.0f} шт\n"
+                        f"Скидка: {point['discount']:.1f}%\n"
+                        f"Выручка: {point['revenue']:.0f} ₽"
+                    )
+                    self._tooltip_annotation.set_text(text)
+                    self._tooltip_annotation.set_visible(True)
+                    found = True
+                    break
+
+            if vis or found:
+                self._tooltip_annotation.set_visible(found)
+                self.canvas_elasticity.draw_idle()
+
+        self._elasticity_tooltip_handler = self.fig_elasticity.canvas.mpl_connect(
+            "motion_notify_event", lambda event: on_hover(event)
+        )
 
         steps = 10
         delay = 60
