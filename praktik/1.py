@@ -1702,6 +1702,101 @@ class SalesAnalyzerApp:
         self.anim3_bars = [rect for rect in bars_all] + bars_lines
         self.canvas3.draw()
 
+        if hasattr(self, '_seasonality_tooltip_handler'):
+            self.fig3.canvas.mpl_disconnect(self._seasonality_tooltip_handler)
+
+        self._seasonality_tooltip_data = []
+
+        month_names = ["Янв", "Фев", "Мар", "Апр", "Май", "Июн",
+                       "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек"]
+
+        for i, bar in enumerate(bars_all):
+            self._seasonality_tooltip_data.append({
+                'x': bar.get_x() + bar.get_width() / 2,
+                'y': bar.get_height(),
+                'category': 'Все категории',
+                'month': month_names[i],
+                'coefficient': round(bar.get_height(), 2)
+            })
+
+        bar_idx = 0
+        for cat in top_categories:
+            cat_data = grouped[grouped['Категория'] == cat]
+            if cat_data.empty:
+                continue
+            avg = cat_data['Количество продаж'].mean()
+            coeffs = [
+                cat_data[cat_data['месяц'] == m + 1]['Количество продаж'].sum() / avg
+                if avg > 0 else 1.0 for m in range(12)
+            ]
+            for m in range(12):
+                if bar_idx < len(bars_lines):
+                    bar = bars_lines[bar_idx]
+                    self._seasonality_tooltip_data.append({
+                        'x': bar.get_x() + bar.get_width() / 2,
+                        'y': bar.get_height(),
+                        'category': cat,
+                        'month': month_names[m],
+                        'coefficient': round(coeffs[m], 2)
+                    })
+                    bar_idx += 1
+
+        self._seasonality_tooltip_annot = self.ax3.annotate(
+            "", xy=(0, 0), xytext=(10, 10),
+            textcoords="offset points",
+            bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="black", alpha=0.9),
+            arrowprops=dict(arrowstyle="->", color="black"),
+            zorder=1000,
+            color="black"
+        )
+        self._seasonality_tooltip_annot.set_visible(False)
+
+        def on_hover_seasonality(event):
+            vis = self._seasonality_tooltip_annot.get_visible()
+            if event.inaxes != self.ax3:
+                if vis:
+                    self._seasonality_tooltip_annot.set_visible(False)
+                    self.canvas3.draw_idle()
+                return
+
+            found = False
+            for point in self._seasonality_tooltip_data:
+                if abs(event.xdata - point['x']) < 0.07:
+                    x, y = point['x'], point['y']
+                    text = (
+                        f"Категория: {point['category']}\n"
+                        f"Месяц: {point['month']}\n"
+                        f"Коэффициент: {point['coefficient']:.2f}"
+                    )
+
+                    xlim = self.ax3.get_xlim()
+                    ylim = self.ax3.get_ylim()
+                    x_range = xlim[1] - xlim[0]
+                    y_range = ylim[1] - ylim[0]
+                    offset_x, offset_y = 10, 10
+
+                    if x > xlim[1] - 0.2 * x_range:
+                        offset_x = -10 - self._seasonality_tooltip_annot.get_bbox_patch().get_width() if hasattr(
+                            self._seasonality_tooltip_annot.get_bbox_patch(), 'get_width') else -80
+
+                    if y > ylim[1] - 0.15 * y_range:
+                        offset_y = -30
+
+                    self._seasonality_tooltip_annot.xy = (x, y)
+                    self._seasonality_tooltip_annot.set_text(text)
+                    self._seasonality_tooltip_annot.xyann = (offset_x, offset_y)
+                    self._seasonality_tooltip_annot.set_visible(True)
+                    found = True
+                    break
+
+            if vis or found:
+                self._seasonality_tooltip_annot.set_visible(found)
+                self.canvas3.draw_idle()
+
+        self._seasonality_tooltip_handler = self.fig3.canvas.mpl_connect(
+            "motion_notify_event", lambda event: on_hover_seasonality(event)
+        )
+        
         recommendations = self._generate_seasonality_recommendations()
         if hasattr(self, 'seasonality_text_widget'):
             self.seasonality_text_widget.config(state=tk.NORMAL)
