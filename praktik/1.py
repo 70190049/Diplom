@@ -14,6 +14,8 @@ import os
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment
 import re
+import mplcursors
+import matplotlib as mpl
 
 
 pd.set_option('future.no_silent_downcasting', True)
@@ -1180,6 +1182,8 @@ class SalesAnalyzerApp:
                 bars = self.ax1.bar(x, qty, bottom=bottom, width=0.6,
                                     color=color_demand, alpha=0.0,
                                     label=f'{cat}: факт')
+                for rect in bars:
+                    rect._demand_category = cat
                 line, = self.ax1b.plot(x, rev, '^-', color=color_revenue,
                                   linewidth=1.8, markersize=5,
                                   alpha=0.0, label=f'{cat}: выручка')
@@ -1328,6 +1332,64 @@ class SalesAnalyzerApp:
                 pass
 
         self.root.after(100, animate_step, 1)
+
+        if hasattr(self, '_cursor_fig1'):
+            self._cursor_fig1.remove()
+
+        artists = []
+        for container in self.ax1.containers:
+            artists.extend(container)
+        artists.extend(self.ax1b.get_lines())
+
+        self._cursor_fig1 = mplcursors.cursor(artists, hover=True)
+
+        x_labels = df['месяц_str'].tolist() if 'месяц_str' in df.columns else [f"M{i + 1}" for i in range(len(df))]
+
+        @self._cursor_fig1.connect("add")
+        def on_add(sel):
+            sel.annotation.set(
+                bbox=dict(boxstyle="round,pad=0.5", fc="white", ec="black", alpha=1.0),
+                color="black",
+                fontsize=9
+            )
+
+            if "Все категории" in categories or len(categories) == 1:
+                category = "Суммарно"
+            else:
+                if isinstance(sel.artist, mpl.patches.Rectangle):
+                    category = getattr(sel.artist, '_demand_category', 'Неизвестно')
+                else:
+                    label = sel.artist.get_label()
+                    category = label.replace(": выручка", "").replace(": факт", "").strip()
+
+            if isinstance(sel.artist, mpl.patches.Rectangle):
+                x_center = sel.artist.get_x() + sel.artist.get_width() / 2
+                idx = int(round(x_center))
+                if 0 <= idx < len(x_labels):
+                    month = x_labels[idx]
+                    value = int(sel.artist.get_height())
+                    sel.annotation.set_text(
+                        f"Категория: {category}\nМесяц: {month}\nСпрос: {value:,} шт".replace(',', ' ')
+                    )
+                else:
+                    sel.annotation.set_visible(False)
+                    self.canvas1.draw_idle()
+            elif isinstance(sel.artist, mpl.lines.Line2D):
+                x_data = sel.target[0]
+                idx = int(round(x_data))
+                if 0 <= idx < len(x_labels):
+                    month = x_labels[idx]
+                    value = int(round(sel.target[1]))
+                    sel.annotation.set_text(
+                        f"Категория: {category}\nМесяц: {month}\nВыручка: {value:,} ₽".replace(',', ' ')
+                    )
+                else:
+                    sel.annotation.set_visible(False)
+                    self.canvas1.draw_idle()
+
+            if hasattr(self, '_tooltip_hide_timer'):
+                self.root.after_cancel(self._tooltip_hide_timer)
+            self._tooltip_hide_timer = self.root.after(1000, lambda s=sel: self._hide_tooltip_safe(s))
 
         if hasattr(self, '_revenue_tooltip_handler'):
             self.fig2.canvas.mpl_disconnect(self._revenue_tooltip_handler)
@@ -1916,6 +1978,13 @@ class SalesAnalyzerApp:
                 self.root.after(delay, animate_step, step + 1)
 
         self.root.after(100, animate_step, 1)
+
+    def _hide_tooltip_safe(self, sel):
+        try:
+            sel.annotation.set_visible(False)
+            self.canvas1.draw_idle()
+        except Exception:
+            pass
 
     def export_to_excel(self):
         if self.df_full is None:
