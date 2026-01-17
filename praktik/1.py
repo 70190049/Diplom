@@ -318,7 +318,7 @@ class SalesAnalyzerApp: #Основной класс GUI-приложения д
         elasticity_rec_title = tk.Label(
             self.elasticity_text_frame,
             text="Рекомендации",
-            font=("Arial", 12, "bold"),
+            font=("Arial", 14, "bold"),
             fg="#1a5276",
             bg="#f8f9fa"
         )
@@ -347,10 +347,10 @@ class SalesAnalyzerApp: #Основной класс GUI-приложения д
         self.canvas_elasticity = FigureCanvasTkAgg(self.fig_elasticity, self.elasticity_graph_frame)
         self.canvas_elasticity.get_tk_widget().pack(side=tk.LEFT, padx=5, pady=5, anchor="nw")
 
-    def toggle_theme(self): #Переключение между светлой и тёмной темой интерфейса
-        self.dark_theme = not self.dark_theme #Инвертируем текущую тему
-        if self.dark_theme: #Определение цветовой палитры
-            bg_color = "#2d2d2d" #Цвета для тёмной темы
+    def toggle_theme(self):  #Переключение между светлой и тёмной темой интерфейса
+        self.dark_theme = not self.dark_theme  #Инвертируем текущую тему
+        if self.dark_theme:  #Определение цветовой палитры
+            bg_color = "#2d2d2d"  #Цвета для тёмной темы
             fg_color = "white"
             stats_fg = "white"
             canvas_bg = "#1e1e1e"
@@ -359,7 +359,7 @@ class SalesAnalyzerApp: #Основной класс GUI-приложения д
             text_bg = "#2d2d2d"
             text_fg = "white"
         else:
-            bg_color = "#f8f9fa" #Цвета для светлой темы (по умолчанию)
+            bg_color = "#f8f9fa"  #Цвета для светлой темы
             fg_color = "#2c3e50"
             stats_fg = "#2c3e50"
             canvas_bg = "white"
@@ -373,14 +373,21 @@ class SalesAnalyzerApp: #Основной класс GUI-приложения д
         self.center_container.config(bg=bg_color)
         self.stats_frame.config(bg=bg_color)
         self.charts_frame.config(bg=bg_color)
-        self.seasonality_frame.config(bg=bg_color)
+        self.seasonality_frame.config(bg=bg_color) #Вкладка "Сезонность"
         self.seasonality_top_frame.config(bg=bg_color)
         self.seasonality_content_frame.config(bg=bg_color)
         self.seasonality_graph_frame.config(bg=bg_color)
         self.seasonality_text_frame.config(bg=bg_color)
         if hasattr(self, 'seasonality_bottom_frame'):
             self.seasonality_bottom_frame.config(bg=bg_color)
-        for widget in self.top_frame.winfo_children() + self.center_container.winfo_children(): #Обновление цветов текстовых меток в верхней панели и центре
+        self.elasticity_frame.config(bg=bg_color) #Вкладка "Эластичность"
+        self.elasticity_top_frame.config(bg=bg_color)
+        self.elasticity_content_frame.config(bg=bg_color)
+        self.elasticity_graph_frame.config(bg=bg_color)
+        self.elasticity_text_frame.config(bg=bg_color)
+        if hasattr(self, 'elasticity_bottom_frame'):
+            self.elasticity_bottom_frame.config(bg=bg_color)
+        for widget in self.top_frame.winfo_children() + self.center_container.winfo_children(): #Обновление меток в верхней панели и центре
             if isinstance(widget, tk.Label):
                 widget.config(bg=bg_color, fg=fg_color)
         cat_frame = next( #Обновление фрейма выбора категорий
@@ -392,32 +399,42 @@ class SalesAnalyzerApp: #Основной класс GUI-приложения д
             for widget in cat_frame.winfo_children():
                 if isinstance(widget, tk.Label):
                     widget.config(bg=bg_color, fg=fg_color)
-        self.theme_btn.config(bg="#7f8c8d" if not self.dark_theme else "#34495e", fg="white") #Обновление цветов кнопок
+        self.theme_btn.config(bg="#7f8c8d" if not self.dark_theme else "#34495e", fg="white") #Обновление кнопок
         self.browse_btn.config(bg="#3498db" if not self.dark_theme else "#2980b9", fg="white")
         self.load_btn.config(bg="#27ae60" if not self.dark_theme else "#218359", fg="white")
         self.export_btn.config(bg="#218359" if not self.dark_theme else "#1a5276", fg="white")
         self.export_plot_btn.config(bg="#21837a" if not self.dark_theme else "#1a5276", fg="white")
         self.seasonality_btn.config(bg="#2f7f99" if not self.dark_theme else "#1a5276", fg="white")
         self.elasticity_btn.config(bg="#2f7f99" if not self.dark_theme else "#1a5276", fg="white")
-        for widget in self.seasonality_top_frame.winfo_children(): #Обновление меток во вкладке "Сезонность"
+        for widget in self.seasonality_top_frame.winfo_children(): #Метки во вкладке "Сезонность"
             if isinstance(widget, tk.Label):
                 widget.config(bg=bg_color, fg=fg_color)
-        for widget in self.seasonality_text_frame.winfo_children():
+        for widget in self.seasonality_text_frame.winfo_children(): #Заголовок "Рекомендации" во вкладке "Сезонность"
             if isinstance(widget, tk.Label) and widget.cget("text") == "Рекомендации":
                 widget.config(bg=bg_color, fg=fg_color)
-        self.stats_label.config(bg=bg_color, fg=stats_fg) #Обновление текста статистики
+        for widget in self.elasticity_top_frame.winfo_children(): #Метки во вкладке "Эластичность"
+            if isinstance(widget, tk.Label):
+                widget.config(bg=bg_color, fg=fg_color)
+        for widget in self.elasticity_text_frame.winfo_children(): #Заголовок "Рекомендации" во вкладке "Эластичность"
+            if isinstance(widget, tk.Label) and widget.cget("text") == "Рекомендации":
+                widget.config(bg=bg_color, fg=fg_color)
+        self.stats_label.config(bg=bg_color, fg=stats_fg) #Статистика
         if hasattr(self, 'seasonality_stats_label'):
             self.seasonality_stats_label.config(bg=bg_color, fg=stats_fg)
-        if hasattr(self, 'seasonality_text_widget'): #Обновление текстовых полей (рекомендаций)
+        if hasattr(self, 'elasticity_stats_label'):
+            self.elasticity_stats_label.config(bg=bg_color, fg=stats_fg)
+        if hasattr(self, 'seasonality_text_widget'): #Текстовые поля рекомендаций
             self.seasonality_text_widget.config(bg=text_bg, fg=text_fg, insertbackground=text_fg)
-        for fig, ax in [(self.fig1, self.ax1), (self.fig2, self.ax2)]: #Обновление графиков fig1 и fig2
-            fig.patch.set_facecolor(canvas_bg) #Фон холста и области графика
+        if hasattr(self, 'elasticity_text_widget'):
+            self.elasticity_text_widget.config(bg=text_bg, fg=text_fg, insertbackground=text_fg)
+        for fig, ax in [(self.fig1, self.ax1), (self.fig2, self.ax2)]: #Обновление основных графиков (fig1, fig2)
+            fig.patch.set_facecolor(canvas_bg)
             ax.set_facecolor(canvas_bg)
-            ax.tick_params(colors=fg_color) #Цвет меток осей, заголовков и делений
+            ax.tick_params(colors=fg_color)
             ax.xaxis.label.set_color(fg_color)
             ax.yaxis.label.set_color(fg_color)
             ax.title.set_color(fg_color)
-            for spine in ax.spines.values(): #Цвет рамки графика
+            for spine in ax.spines.values():
                 spine.set_color(fg_color)
         for ax in [self.ax1, self.ax2]: #Обновление легенд основных графиков
             legend = ax.get_legend()
@@ -428,7 +445,7 @@ class SalesAnalyzerApp: #Основной класс GUI-приложения д
                 frame.set_alpha(0.9)
                 for text in legend.get_texts():
                     text.set_color(fg_color)
-        if hasattr(self, 'ax1b') and self.ax1b: #Обновление правой оси Y (выручка)
+        if hasattr(self, 'ax1b') and self.ax1b: #Обновление правой оси Y (выручка) на первом графике
             revenue_color = "white" if self.dark_theme else "black"
             self.ax1b.yaxis.label.set_color(revenue_color)
             self.ax1b.tick_params(axis='y', colors=revenue_color)
@@ -443,7 +460,7 @@ class SalesAnalyzerApp: #Основной класс GUI-приложения д
             self.ax3.title.set_color(fg_color)
             for spine in self.ax3.spines.values():
                 spine.set_color(fg_color)
-            legend3 = self.ax3.get_legend() #Легенда графика сезонности
+            legend3 = self.ax3.get_legend()
             if legend3:
                 frame = legend3.get_frame()
                 frame.set_facecolor(legend_bg)
@@ -452,43 +469,27 @@ class SalesAnalyzerApp: #Основной класс GUI-приложения д
                 for text in legend3.get_texts():
                     text.set_color(fg_color)
             self.canvas3.draw()
-            if hasattr(self, 'elasticity_frame'): #Обновление вкладки "Эластичность"
-                self.elasticity_frame.config(bg=bg_color) #Фоны фреймов
-                self.elasticity_top_frame.config(bg=bg_color)
-                self.elasticity_content_frame.config(bg=bg_color)
-                self.elasticity_graph_frame.config(bg=bg_color)
-                self.elasticity_text_frame.config(bg=bg_color)
-                if hasattr(self, 'elasticity_bottom_frame'):
-                    self.elasticity_bottom_frame.config(bg=bg_color)
-                for widget in self.elasticity_top_frame.winfo_children(): #Метки во вкладке эластичности
-                    if isinstance(widget, tk.Label):
-                        widget.config(bg=bg_color, fg=fg_color)
-                if hasattr(self, 'back_from_elasticity_btn'): #Кнопка "Назад"
-                    self.back_from_elasticity_btn.config(bg="#2c3e50", fg="white")
-                for widget in self.elasticity_text_frame.winfo_children(): #Заголовок "Рекомендации"
-                    if isinstance(widget, tk.Label) and widget.cget("text") == "Рекомендации":
-                        widget.config(bg=bg_color, fg=fg_color)
-                if hasattr(self, 'elasticity_text_widget'): #Текстовое поле рекомендаций
-                    self.elasticity_text_widget.config(
-                        bg=text_bg,
-                        fg=text_fg,
-                        insertbackground=text_fg
-                    )
-                if hasattr(self, 'elasticity_stats_label'): #Статистика эластичности
-                    self.elasticity_stats_label.config(bg=bg_color, fg=stats_fg)
-            if hasattr(self, 'fig_elasticity') and self.fig_elasticity: #Обновление графика эластичности
-                if self.df_full is not None and not self.df_full.empty:
-                    self._draw_elasticity_graph()
-                else:
-                    self.ax_elasticity.clear() #Сообщение при отсутствии данных
-                    self.ax_elasticity.text(0.5, 0.5, "Нет данных", ha='center', va='center', fontsize=14,
-                                            color='white' if self.dark_theme else 'gray')
-                if hasattr(self, '_elasticity_colorbar') and self._elasticity_colorbar: #Цветовая шкала графика эластичности
-                    self._elasticity_colorbar.ax.yaxis.set_tick_params(color=fg_color)
-                    self._elasticity_colorbar.outline.set_edgecolor(fg_color)
-                    plt.setp(self._elasticity_colorbar.ax.get_yticklabels(), color=fg_color)
-                    self._elasticity_colorbar.ax.yaxis.label.set_color(fg_color)
-                self.canvas_elasticity.draw()
+        if hasattr(self, 'fig_elasticity') and self.fig_elasticity: #Обновление графика эластичности всегда, даже без данных
+            self.fig_elasticity.patch.set_facecolor(canvas_bg)
+            self.ax_elasticity.set_facecolor(canvas_bg)
+            self.ax_elasticity.tick_params(colors=fg_color)
+            self.ax_elasticity.xaxis.label.set_color(fg_color)
+            self.ax_elasticity.yaxis.label.set_color(fg_color)
+            self.ax_elasticity.title.set_color(fg_color)
+            for spine in self.ax_elasticity.spines.values():
+                spine.set_color(fg_color)
+            if self.df_full is None or self.df_full.empty: #Если нет данных,показываем заглушку
+                self.ax_elasticity.clear()
+                self.ax_elasticity.text(0.5, 0.5, "Нет данных", ha='center', va='center', fontsize=14,
+                                        color='white' if self.dark_theme else 'gray')
+            else:
+                self._draw_elasticity_graph()  #Перерисовываем с новой темой
+            if hasattr(self, '_elasticity_colorbar') and self._elasticity_colorbar: #Обновление цветовой шкалы
+                self._elasticity_colorbar.ax.yaxis.set_tick_params(color=fg_color)
+                self._elasticity_colorbar.outline.set_edgecolor(fg_color)
+                plt.setp(self._elasticity_colorbar.ax.get_yticklabels(), color=fg_color)
+                self._elasticity_colorbar.ax.yaxis.label.set_color(fg_color)
+            self.canvas_elasticity.draw()
         self.canvas1.draw() #Применение изменений к основным графикам
         self.canvas2.draw()
 
@@ -1290,15 +1291,43 @@ class SalesAnalyzerApp: #Основной класс GUI-приложения д
             self._draw_animation(self.selected_categories)
 
     def _draw_elasticity_graph(self): #Отрисовывает график ценовой эластичности и эффективности скидок
-        if self.df_full is None or self.df_full.empty: #Отображение сообщения при отсутствии данных
-            self.ax_elasticity.clear()
-            self.ax_elasticity.text(0.5, 0.5, "Нет данных", ha='center', va='center', fontsize=14, color='gray')
-            self.canvas_elasticity.draw()
-            return
+        if self.dark_theme: #Определяем цвета в зависимости от текущей темы
+            bg = "#1e1e1e"
+            fg = "white"
+            text_bg = "#2d2d2d"
+            text_fg = "white"
+        else:
+            bg = "white"
+            fg = "#2c3e50"
+            text_bg = "white"
+            text_fg = "#2c3e50"
         if hasattr(self, '_elasticity_tooltip_handler'): #Отключение предыдущего обработчика подсказок
             self.fig_elasticity.canvas.mpl_disconnect(self._elasticity_tooltip_handler)
+        for widget in self.elasticity_top_frame.winfo_children():
+            if isinstance(widget, tk.Label) and "эластичность" in widget.cget("text").lower():
+                widget.config(bg=text_bg, fg=text_fg)
         self.fig_elasticity.clear() #Очистка и подготовка холста
         self.ax_elasticity = self.fig_elasticity.add_subplot(111)
+        self.fig_elasticity.patch.set_facecolor(bg) #Настройка фона графика
+        self.ax_elasticity.set_facecolor(bg)
+        self.ax_elasticity.tick_params(colors=fg)
+        self.ax_elasticity.xaxis.label.set_color(fg)
+        self.ax_elasticity.yaxis.label.set_color(fg)
+        self.ax_elasticity.title.set_color(fg)
+        for spine in self.ax_elasticity.spines.values():
+            spine.set_color(fg)
+        if self.df_full is None or self.df_full.empty: #Нет данных, показываем заглушку
+            self.ax_elasticity.text(0.5, 0.5, "Нет данных", ha='center', va='center', fontsize=14,
+                                    color='white' if self.dark_theme else 'gray')
+            self.canvas_elasticity.draw()
+            self.elasticity_text_widget.config(state=tk.NORMAL) #Обновляем текстовое поле и статистику
+            self.elasticity_text_widget.delete(1.0, tk.END)
+            self.elasticity_text_widget.insert(tk.END, "Недостаточно данных для анализа эластичности.")
+            self.elasticity_text_widget.config(state=tk.DISABLED)
+            self.elasticity_stats_label.config(text="Нет данных")
+            self.elasticity_text_widget.config(bg=text_bg, fg=text_fg, insertbackground=text_fg) #Устанавливаем цвета
+            self.elasticity_stats_label.config(bg=bg, fg=fg)
+            return
         df = self.df_full.copy() #Подготовка данных
         df['Скидки'] = pd.to_numeric(df['Скидки'], errors='coerce').fillna(0)
         df['Цена со скидкой'] = df['Цена за шт'] * (1 - df['Скидки'] / 100)
@@ -1494,6 +1523,8 @@ class SalesAnalyzerApp: #Основной класс GUI-приложения д
                 avg_rev_lift = np.mean(rev_lifts)
                 stats.append(f"Средний эффект скидок: {avg_rev_lift:+.1f}%")
         self.elasticity_stats_label.config(text=" • ".join(stats) if stats else "Нет данных для агрегации")
+        self.elasticity_text_widget.config(bg=text_bg, fg=text_fg, insertbackground=text_fg)
+        self.elasticity_stats_label.config(bg=text_bg, fg=text_fg)
 
     def _draw_seasonality_graph(self): #Отрисовывает график сезонности спроса по месяцам
         if self.df_full is None or self.df_full.empty: #Отображение сообщения при отсутствии данных
@@ -1712,6 +1743,56 @@ class SalesAnalyzerApp: #Основной класс GUI-приложения д
         if self.df_full is None:
             messagebox.showwarning("Внимание", "Сначала запустите анализ.")
             return
+        dialog = tk.Toplevel(self.root) #Диалог выбора листов
+        dialog.title("Выберите листы для экспорта")
+        dialog.geometry("320x280")
+        dialog.resizable(False, False)
+        dialog.transient(self.root)
+        dialog.grab_set()
+        dialog.update_idletasks() #Центрирование окна
+        x = self.root.winfo_x() + (self.root.winfo_width() // 2) - (dialog.winfo_width() // 2)
+        y = self.root.winfo_y() + (self.root.winfo_height() // 2) - (dialog.winfo_height() // 2)
+        dialog.geometry(f"+{x}+{y}")
+        tk.Label(dialog, text="Выберите листы:", font=("Arial", 11, "bold")).pack(pady=10)
+        var_forecast = tk.BooleanVar(value=True) #Переменные для чекбоксов
+        var_monthly = tk.BooleanVar(value=True)
+        var_categories = tk.BooleanVar(value=True)
+        var_items = tk.BooleanVar(value=True)
+        var_seasonality = tk.BooleanVar(value=True)
+        var_elasticity = tk.BooleanVar(value=True)
+        checkboxes = [ #Чекбоксы
+            ("Прогноз на 2026", var_forecast),
+             ("Оценка по месяцам", var_monthly),
+            ("По категориям", var_categories),
+            ("По товарам", var_items),
+            ("Сезонность", var_seasonality),
+            ("Эластичность и скидки", var_elasticity)
+        ]
+        for text, var in checkboxes:
+            cb = tk.Checkbutton(dialog, text=text, variable=var, anchor="w", width=30)
+            cb.pack(anchor="w", padx=30, pady=2)
+        selected_sheets = {}
+
+        def on_ok():
+            selected_sheets.update({
+                'forecast': var_forecast.get(),
+                'monthly': var_monthly.get(),
+                'categories': var_categories.get(),
+                'items': var_items.get(),
+                'seasonality': var_seasonality.get(),
+                'elasticity': var_elasticity.get()
+            })
+            dialog.destroy()
+
+        def on_cancel():
+            dialog.destroy()
+        btn_frame = tk.Frame(dialog) #Кнопки
+        btn_frame.pack(pady=15)
+        tk.Button(btn_frame, text="OK", command=on_ok, width=10).pack(side=tk.LEFT, padx=5)
+        tk.Button(btn_frame, text="Отмена", command=on_cancel, width=10).pack(side=tk.LEFT, padx=5)
+        self.root.wait_window(dialog)
+        if not any(selected_sheets.values()): #Если ничего не выбрано, то выход
+            return
         try: #Формирование имени файла
             cat_name = "все" if "Все категории" in self.selected_categories else "_".join(self.selected_categories[:3])
             default_name = f"Прогноз_спроса_{sanitize_filename(cat_name)}" + ".xlsx"
@@ -1726,173 +1807,183 @@ class SalesAnalyzerApp: #Основной класс GUI-приложения д
             if not path.lower().endswith('.xlsx'):
                 path += '.xlsx'
             wb = openpyxl.Workbook() #Создание рабочей книги Excel
-            ws1 = wb.active
-            ws1.title = "Прогноз на 2026"
-            ws1.append(["Месяц", "Прогноз выручки (₽)", "Прогноз спроса (шт)"])
-            for cell in ws1[1]: #Стилизация заголовка
-                cell.font = Font(bold=True)
-                cell.fill = PatternFill("solid", fgColor="DEEBF7")
-                cell.alignment = Alignment(horizontal="center")
-            if self.future_monthly is not None and not self.future_monthly.empty: #Заполнение данных прогноза на 2026
-                for _, row in self.future_monthly.iterrows():
-                    month = str(row['месяц_str']) if 'месяц_str' in row else f"2026-{int(row['month_id'])+1:02d}"
-                    rev = int(round(row['прогноз_выручка'])) if pd.notna(row['прогноз_выручка']) else 0
-                    qty = int(round(row['прогноз_спроса'])) if pd.notna(row['прогноз_спроса']) else 0
-                    ws1.append([month, rev, qty])
-            else: #Fallback: агрегация по категориям
-                rev_total = np.zeros(12)
-                qty_total = np.zeros(12)
+            wb.remove(wb.active)
+            first_sheet_created = False
+            if selected_sheets.get('forecast', False): #Лист 1: Прогноз на 2026
+                ws1 = wb.create_sheet("Прогноз на 2026")
+                if not first_sheet_created:
+                    wb.active = ws1
+                    first_sheet_created = True
+                ws1.append(["Месяц", "Прогноз выручки (₽)", "Прогноз спроса (шт)"])
+                for cell in ws1[1]: #Стилизация заголовка
+                    cell.font = Font(bold=True)
+                    cell.fill = PatternFill("solid", fgColor="DEEBF7")
+                    cell.alignment = Alignment(horizontal="center")
+                if self.future_monthly is not None and not self.future_monthly.empty: #Заполнение данных прогноза на 2026
+                    for _, row in self.future_monthly.iterrows():
+                        month = str(row['месяц_str']) if 'месяц_str' in row else f"2026-{int(row['month_id'])+1:02d}"
+                        rev = int(round(row['прогноз_выручка'])) if pd.notna(row['прогноз_выручка']) else 0
+                        qty = int(round(row['прогноз_спроса'])) if pd.notna(row['прогноз_спроса']) else 0
+                        ws1.append([month, rev, qty])
+                else: #Fallback: агрегация по категориям
+                    rev_total = np.zeros(12)
+                    qty_total = np.zeros(12)
+                    for cat in self.selected_categories:
+                        if cat in self.future_by_cat:
+                            rev_total += self.future_by_cat[cat]
+                    for i in range(12):
+                        ws1.append([f"2026-{i+1:02d}", int(rev_total[i]), int(rev_total[i] // 100)])
+            if selected_sheets.get('monthly', False): #Лист 2: Оценка по месяцам
+                ws2 = wb.create_sheet("Оценка по месяцам")
+                ws2.append(["Месяц", "Факт: спрос (шт)", "Оценка: спрос (шт)", "Факт: выручка (₽)", "Оценка: выручка (₽)"])
+                for cell in ws2[1]:
+                    cell.font = Font(bold=True)
+                    cell.fill = PatternFill("solid", fgColor="E2F0D9")
+                    cell.alignment = Alignment(horizontal="center")
+                for _, row in self.monthly_df.iterrows():
+                    month = str(row['месяц_str'])
+                    fact_qty = int(row['Количество продаж'])
+                    pred_qty = int(round(row['прогноз_спроса'])) if 'прогноз_спроса' in row and pd.notna(row['прогноз_спроса']) else fact_qty
+                    fact_rev = int(fact_qty * row['Цена за шт'])
+                    pred_rev = int(round(row['оценка_выручки'])) if 'оценка_выручки' in row and pd.notna(row['оценка_выручки']) else fact_rev
+                    ws2.append([month, fact_qty, pred_qty, fact_rev, pred_rev])
+            if selected_sheets.get('categories', False): #Лист 3: По категориям
+                ws3 = wb.create_sheet("По категориям")
+                ws3.append(["Категория", "Факт: спрос", "Прогноз: спрос", "Факт: выручка", "Прогноз: выручка"])
+                for cell in ws3[1]:
+                    cell.font = Font(bold=True)
+                    cell.fill = PatternFill("solid", fgColor="D6EAF8")
+                    cell.alignment = Alignment(horizontal="center")
                 for cat in self.selected_categories:
-                    if cat in self.future_by_cat:
-                        rev_total += self.future_by_cat[cat]
-                for i in range(12):
-                    ws1.append([f"2026-{i+1:02d}", int(rev_total[i]), int(rev_total[i] // 100)])
-            ws2 = wb.create_sheet("Оценка по месяцам") #Лист 2: Оценка по месяцам
-            ws2.append(["Месяц", "Факт: спрос (шт)", "Оценка: спрос (шт)", "Факт: выручка (₽)", "Оценка: выручка (₽)"])
-            for cell in ws2[1]:
-                cell.font = Font(bold=True)
-                cell.fill = PatternFill("solid", fgColor="E2F0D9")
-                cell.alignment = Alignment(horizontal="center")
-            for _, row in self.monthly_df.iterrows():
-                month = str(row['месяц_str'])
-                fact_qty = int(row['Количество продаж'])
-                pred_qty = int(round(row['прогноз_спроса'])) if 'прогноз_спроса' in row and pd.notna(row['прогноз_спроса']) else fact_qty
-                fact_rev = int(fact_qty * row['Цена за шт'])
-                pred_rev = int(round(row['оценка_выручки'])) if 'оценка_выручки' in row and pd.notna(row['оценка_выручки']) else fact_rev
-                ws2.append([month, fact_qty, pred_qty, fact_rev, pred_rev])
-            ws3 = wb.create_sheet("По категориям") #Лист 3: По категориям
-            ws3.append(["Категория", "Факт: спрос", "Прогноз: спрос", "Факт: выручка", "Прогноз: выручка"])
-            for cell in ws3[1]:
-                cell.font = Font(bold=True)
-                cell.fill = PatternFill("solid", fgColor="D6EAF8")
-                cell.alignment = Alignment(horizontal="center")
-            for cat in self.selected_categories:
-                if cat == "Все категории":
-                    cat_df = self.df_full
-                else:
-                    cat_df = self.df_full[self.df_full['Категория'] == cat]
-                if cat_df.empty:
-                    continue
-                fact_qty = cat_df['Количество продаж'].sum()
-                pred_qty = cat_df['прогноз_спроса'].sum() if 'прогноз_спроса' in cat_df.columns else fact_qty
-                fact_rev = (cat_df['Количество продаж'] * cat_df['Цена за шт']).sum()
-                pred_rev = cat_df['оценка_выручки'].sum() if 'оценка_выручки' in cat_df.columns else fact_rev
-                ws3.append([cat, int(fact_qty), int(pred_qty), int(fact_rev), int(pred_rev)])
-            ws4 = wb.create_sheet("Товары") #Лист 4: По товарам
-            ws4.append(["Товар", "Категория", "Средняя цена", "Факт: спрос", "Прогноз: спрос", "Факт: выручка", "Прогноз: выручка"])
-            for cell in ws4[1]:
-                cell.font = Font(bold=True)
-                cell.fill = PatternFill("solid", fgColor="D9E1F2")
-                cell.alignment = Alignment(horizontal="center")
-            df_export = self.df_full.copy()
-            if 'прогноз_спроса' not in df_export.columns:
-                df_export['прогноз_спроса'] = df_export['Количество продаж']
-            if 'оценка_выручки' not in df_export.columns:
-                df_export['оценка_выручки'] = df_export['Количество продаж'] * df_export['Цена за шт']
-            item_agg = df_export.groupby('Товар', as_index=False).agg({
-                'Категория': 'first',
-                'Цена за шт': 'mean',
-                'Количество продаж': 'sum',
-                'прогноз_спроса': 'sum',
-                'оценка_выручки': 'sum'
-            })
-            for _, row in item_agg.iterrows():
-                ws4.append([
-                    row['Товар'],
-                    row['Категория'],
-                    round(row['Цена за шт'], 2),
-                    int(row['Количество продаж']),
-                    int(round(row['прогноз_спроса'])),
-                    int(round(row['Количество продаж'] * row['Цена за шт'])),
-                    int(round(row['оценка_выручки']))
-                ])
-            ws5 = wb.create_sheet("Сезонность") #Лист 5: Сезонность
-            ws5.append(["Месяц", "Все категории"] + sorted(self.seasonal_coeffs.keys()) if hasattr(self,
-                                                                                                   'seasonal_coeffs') else [])
-            for cell in ws5[1]:
-                cell.font = Font(bold=True)
-                cell.fill = PatternFill("solid", fgColor="E2F0D9")
-                cell.alignment = Alignment(horizontal="center")
-            month_names = ["Янв", "Фев", "Мар", "Апр", "Май", "Июн",
-                           "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек"]
-            for i, month in enumerate(range(1, 13)):
-                row = [month_names[i]]
-                if hasattr(self, 'df_full') and not self.df_full.empty:
-                    df = self.df_full
-                    df['месяц'] = df['Дата'].dt.month
-                    total_by_month = df.groupby('месяц')['Количество продаж'].sum()
-                    avg_total = total_by_month.mean()
-                    all_coeff = total_by_month.get(month, 0) / avg_total if avg_total else 1.0
-                    row.append(round(all_coeff, 2))
-                else:
-                    row.append(1.0)
-                if hasattr(self, 'seasonal_coeffs'):
-                    for cat in sorted(self.seasonal_coeffs.keys()):
-                        coeff = self.seasonal_coeffs[cat].get(month, 1.0)
-                        row.append(round(coeff, 2))
-                else:
-                    for _ in sorted(self.seasonal_coeffs.keys()):
+                    if cat == "Все категории":
+                        cat_df = self.df_full
+                    else:
+                        cat_df = self.df_full[self.df_full['Категория'] == cat]
+                    if cat_df.empty:
+                        continue
+                    fact_qty = cat_df['Количество продаж'].sum()
+                    pred_qty = cat_df['прогноз_спроса'].sum() if 'прогноз_спроса' in cat_df.columns else fact_qty
+                    fact_rev = (cat_df['Количество продаж'] * cat_df['Цена за шт']).sum()
+                    pred_rev = cat_df['оценка_выручки'].sum() if 'оценка_выручки' in cat_df.columns else fact_rev
+                    ws3.append([cat, int(fact_qty), int(pred_qty), int(fact_rev), int(pred_rev)])
+            if selected_sheets.get('items', False): #Лист 4: По товарам
+                ws4 = wb.create_sheet("Товары")
+                ws4.append(["Товар", "Категория", "Средняя цена", "Факт: спрос", "Прогноз: спрос", "Факт: выручка", "Прогноз: выручка"])
+                for cell in ws4[1]:
+                    cell.font = Font(bold=True)
+                    cell.fill = PatternFill("solid", fgColor="D9E1F2")
+                    cell.alignment = Alignment(horizontal="center")
+                df_export = self.df_full.copy()
+                if 'прогноз_спроса' not in df_export.columns:
+                    df_export['прогноз_спроса'] = df_export['Количество продаж']
+                if 'оценка_выручки' not in df_export.columns:
+                    df_export['оценка_выручки'] = df_export['Количество продаж'] * df_export['Цена за шт']
+                item_agg = df_export.groupby('Товар', as_index=False).agg({
+                    'Категория': 'first',
+                    'Цена за шт': 'mean',
+                    'Количество продаж': 'sum',
+                    'прогноз_спроса': 'sum',
+                    'оценка_выручки': 'sum'
+                })
+                for _, row in item_agg.iterrows():
+                    ws4.append([
+                        row['Товар'],
+                        row['Категория'],
+                        round(row['Цена за шт'], 2),
+                        int(row['Количество продаж']),
+                        int(round(row['прогноз_спроса'])),
+                        int(round(row['Количество продаж'] * row['Цена за шт'])),
+                        int(round(row['оценка_выручки']))
+                    ])
+            if selected_sheets.get('seasonality', False): #Лист 5: Сезонность
+                ws5 = wb.create_sheet("Сезонность")
+                ws5.append(["Месяц", "Все категории"] + sorted(self.seasonal_coeffs.keys()) if hasattr(self,
+                                                                                                       'seasonal_coeffs') else [])
+                for cell in ws5[1]:
+                    cell.font = Font(bold=True)
+                    cell.fill = PatternFill("solid", fgColor="E2F0D9")
+                    cell.alignment = Alignment(horizontal="center")
+                month_names = ["Янв", "Фев", "Мар", "Апр", "Май", "Июн",
+                               "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек"]
+                for i, month in enumerate(range(1, 13)):
+                    row = [month_names[i]]
+                    if hasattr(self, 'df_full') and not self.df_full.empty:
+                        df = self.df_full
+                        df['месяц'] = df['Дата'].dt.month
+                        total_by_month = df.groupby('месяц')['Количество продаж'].sum()
+                        avg_total = total_by_month.mean()
+                        all_coeff = total_by_month.get(month, 0) / avg_total if avg_total else 1.0
+                        row.append(round(all_coeff, 2))
+                    else:
                         row.append(1.0)
-                ws5.append(row)
-            for row in ws5.iter_rows(min_row=2, max_row=13, min_col=2, max_col=ws5.max_column): #Условное форматирование: выделение пиков и провалов
-                for cell in row:
-                    if isinstance(cell.value, (int, float)) and cell.value > 1.5:
-                        cell.fill = PatternFill("solid", fgColor="C6EFCE") #Пик сезонности
-                        cell.font = Font(bold=True, color="006100")
-                    elif isinstance(cell.value, (int, float)) and cell.value < 0.7:
-                        cell.fill = PatternFill("solid", fgColor="F8CBAD") #Провал сезонности
-                        cell.font = Font(color="9C5700")
-            ws5.append([]) #Добавление рекомендаций по сезонности
-            ws5.append(["Рекомендации"])
-            ws5.merge_cells(start_row=ws5.max_row, start_column=1, end_row=ws5.max_row, end_column=ws5.max_column)
-            ws5[ws5.max_row][0].font = Font(bold=True, color="1A5276")
-            ws5[ws5.max_row][0].alignment = Alignment(horizontal="left")
-            recs = []
-            if hasattr(self, 'seasonal_coeffs'):
-                for cat, coeffs in self.seasonal_coeffs.items():
-                    peaks = [m for m, c in coeffs.items() if c > 1.8]
-                    lows = [m for m, c in coeffs.items() if c < 0.6]
-                    if peaks:
-                        peak_months = ", ".join([month_names[m - 1] for m in sorted(peaks)])
-                        recs.append(f"• {cat}: повышенный спрос в {peak_months} → увеличить закупки за 1–2 мес.")
-                    if lows:
-                        low_months = ", ".join([month_names[m - 1] for m in sorted(lows)])
-                        recs.append(f"• {cat}: низкий спрос в {low_months} → избегать закупок, запускать акции.")
-            if not recs:
-                recs = ["• Чёткой сезонности не обнаружено. Рекомендуется собрать больше данных (≥2 года)."]
-            for rec in recs:
-                ws5.append([rec])
-            ws6 = wb.create_sheet("Эластичность и скидки") #Лист 6: Эластичность и скидки
-            ws6.append(
-                ["Категория", "Эластичность", "Δ спрос при скидке, %", "Δ выручка при скидке, %", "Рекомендация"])
-            for cell in ws6[1]:
-                cell.font = Font(bold=True)
-                cell.fill = PatternFill("solid", fgColor="D0ECE7")
-                cell.alignment = Alignment(horizontal="center")
-            all_cats = set()
-            if hasattr(self, 'price_elasticity'):
-                all_cats.update(self.price_elasticity.keys())
-            if hasattr(self, 'discount_effect'):
-                all_cats.update(self.discount_effect.keys())
-            for cat in sorted(all_cats):
-                elasticity = self.price_elasticity.get(cat, 0)
-                delta_qty, delta_rev = self.discount_effect.get(cat, (0, 0))
-                if delta_rev > 5: #Формирование рекомендаций по скидкам
-                    rec = "Увеличить охват скидок"
-                elif delta_rev < -3:
-                    rec = "Пересмотреть механику скидок"
-                else:
-                    rec = "Оставить без изменений"
-                ws6.append([cat, round(elasticity, 2), round(delta_qty, 1), round(delta_rev, 1), rec])
-            for row in ws6.iter_rows(min_row=2, max_row=ws6.max_row, min_col=4, max_col=4): #Условное форматирование для эффекта скидок
-                cell = row[0]
-                if isinstance(cell.value, (int, float)):
-                    if cell.value > 5:
-                        cell.fill = PatternFill("solid", fgColor="C6EFCE")
-                        cell.font = Font(color="006100")
-                    elif cell.value < -3:
-                        cell.fill = PatternFill("solid", fgColor="F8CBAD")
-                        cell.font = Font(color="9C5700")
+                    if hasattr(self, 'seasonal_coeffs'):
+                        for cat in sorted(self.seasonal_coeffs.keys()):
+                            coeff = self.seasonal_coeffs[cat].get(month, 1.0)
+                            row.append(round(coeff, 2))
+                    else:
+                        for _ in sorted(self.seasonal_coeffs.keys()):
+                            row.append(1.0)
+                    ws5.append(row)
+                for row in ws5.iter_rows(min_row=2, max_row=13, min_col=2, max_col=ws5.max_column): #Условное форматирование: выделение пиков и провалов
+                    for cell in row:
+                        if isinstance(cell.value, (int, float)) and cell.value > 1.5:
+                            cell.fill = PatternFill("solid", fgColor="C6EFCE") #Пик сезонности
+                            cell.font = Font(bold=True, color="006100")
+                        elif isinstance(cell.value, (int, float)) and cell.value < 0.7:
+                            cell.fill = PatternFill("solid", fgColor="F8CBAD") #Провал сезонности
+                            cell.font = Font(color="9C5700")
+                ws5.append([]) #Добавление рекомендаций по сезонности
+                ws5.append(["Рекомендации"])
+                ws5.merge_cells(start_row=ws5.max_row, start_column=1, end_row=ws5.max_row, end_column=ws5.max_column)
+                ws5[ws5.max_row][0].font = Font(bold=True, color="1A5276")
+                ws5[ws5.max_row][0].alignment = Alignment(horizontal="left")
+                recs = []
+                if hasattr(self, 'seasonal_coeffs'):
+                    for cat, coeffs in self.seasonal_coeffs.items():
+                        peaks = [m for m, c in coeffs.items() if c > 1.8]
+                        lows = [m for m, c in coeffs.items() if c < 0.6]
+                        if peaks:
+                            peak_months = ", ".join([month_names[m - 1] for m in sorted(peaks)])
+                            recs.append(f"• {cat}: повышенный спрос в {peak_months} → увеличить закупки за 1–2 мес.")
+                        if lows:
+                            low_months = ", ".join([month_names[m - 1] for m in sorted(lows)])
+                            recs.append(f"• {cat}: низкий спрос в {low_months} → избегать закупок, запускать акции.")
+                if not recs:
+                    recs = ["• Чёткой сезонности не обнаружено. Рекомендуется собрать больше данных (≥2 года)."]
+                for rec in recs:
+                    ws5.append([rec])
+            if selected_sheets.get('elasticity', False): #Лист 6: Эластичность и скидки
+                ws6 = wb.create_sheet("Эластичность и скидки")
+                ws6.append(
+                    ["Категория", "Эластичность", "Δ спрос при скидке, %", "Δ выручка при скидке, %", "Рекомендация"])
+                for cell in ws6[1]:
+                    cell.font = Font(bold=True)
+                    cell.fill = PatternFill("solid", fgColor="D0ECE7")
+                    cell.alignment = Alignment(horizontal="center")
+                all_cats = set()
+                if hasattr(self, 'price_elasticity'):
+                    all_cats.update(self.price_elasticity.keys())
+                if hasattr(self, 'discount_effect'):
+                    all_cats.update(self.discount_effect.keys())
+                for cat in sorted(all_cats):
+                    elasticity = self.price_elasticity.get(cat, 0)
+                    delta_qty, delta_rev = self.discount_effect.get(cat, (0, 0))
+                    if delta_rev > 5: #Формирование рекомендаций по скидкам
+                        rec = "Увеличить охват скидок"
+                    elif delta_rev < -3:
+                        rec = "Пересмотреть механику скидок"
+                    else:
+                        rec = "Оставить без изменений"
+                    ws6.append([cat, round(elasticity, 2), round(delta_qty, 1), round(delta_rev, 1), rec])
+                for row in ws6.iter_rows(min_row=2, max_row=ws6.max_row, min_col=4, max_col=4): #Условное форматирование для эффекта скидок
+                    cell = row[0]
+                    if isinstance(cell.value, (int, float)):
+                        if cell.value > 5:
+                            cell.fill = PatternFill("solid", fgColor="C6EFCE")
+                            cell.font = Font(color="006100")
+                        elif cell.value < -3:
+                            cell.fill = PatternFill("solid", fgColor="F8CBAD")
+                            cell.font = Font(color="9C5700")
             wb.save(path) #Сохранение файла
             messagebox.showinfo("Успех", f"Прогноз сохранён:\n{os.path.basename(path)}")
         except PermissionError:
